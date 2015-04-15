@@ -1,0 +1,34 @@
+%YAML:1.0
+
+# pixel/superpixel size
+#pixelSize: 8
+#sPixelSize: 3
+
+pixelSize: 8
+sPixelSize: 3
+
+stereo: 1
+iterations: 1
+
+# energy weights
+appWeight: 10.0
+regWeight: 2.0
+lenWeight: 1.0
+sizeWeight: 1.0
+
+# stereo weights
+
+dispBeta: 2.0
+dispWeight: 0.0000
+smoWeight: 0.0000
+priorWeight: 0.0000
+occPriorWeight: 0.2
+hiPriorWeight: 0.1
+
+
+
+
+
+
+
+

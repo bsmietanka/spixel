@@ -1,0 +1,21 @@
+%YAML:1.0
+
+# pixel/superpixel size
+#pixelSize: 8
+#sPixelSize: 3
+
+pixelSize: 8
+sPixelSize: 3
+
+iterations: 1
+
+# energy weights
+appWeight: 1.0
+regWeight: 0.0
+lenWeight: 0.0
+sizeWeight: 0.0
+
+
+
+
+
