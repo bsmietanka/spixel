@@ -149,24 +149,21 @@ cv::Mat InterpolateDisparityImage(const cv::Mat& img)
 
 
 // Fills pixel with zero value with min of its neighbors in
-// the same row. As in Jian's code.
+// the same row. As in Jian's code input is Mat1d
 Mat FillGapsInDisparityImage(const Mat& img)
 {
     if (img.rows == 0 || img.cols == 0)
-        return Mat1w();
+        return Mat1d();
 
-    if (img.type() != CV_16UC1)
-        throw std::exception("Depth image is not unsigned 16 bit image");
-
-    Mat1w result = Mat1w(img.rows, img.cols);
+    Mat1d result = Mat1d(img.rows, img.cols);
     
     for (int r = 0; r < img.rows; r++) {
         int zCount = 0;
-        ushort nzVal = 0;
+        double nzVal = 0.0;
 
         for (int c = 0; c < img.cols; c++) {
-            const ushort& p = img.at<ushort>(r, c);
-            ushort& rp = result(r, c);
+            const double& p = img.at<double>(r, c);
+            double& rp = result(r, c);
 
             if (p == 0) zCount++;
             else {
@@ -180,7 +177,7 @@ Mat FillGapsInDisparityImage(const Mat& img)
             }
         }
         for (int c = 0; c < img.cols; c++) {
-            const ushort& p = img.at<ushort>(r, c);
+            const double& p = img.at<double>(r, c);
 
             if (p > 0) {
                 for (int zc = 0; zc < c; zc++) result(r, zc) = p;
@@ -188,7 +185,7 @@ Mat FillGapsInDisparityImage(const Mat& img)
             }
         }
         for (int c = img.cols - 1; c >= 0; c--) {
-            const ushort& p = img.at<ushort>(r, c);
+            const double& p = img.at<double>(r, c);
 
             if (p > 0) {
                 for (int zc = c + 1; zc < img.cols; zc++) result(r, zc) = p;
@@ -200,7 +197,7 @@ Mat FillGapsInDisparityImage(const Mat& img)
     // Fill from bottom and top
     for (int c = 0; c < result.cols; c++) {
         for (int r = 0; r < result.rows; r++) {
-            const ushort& p = result(r, c);
+            const double& p = result(r, c);
 
             if (p > 0) {
                 for (int zr = 0; zr < r; zr++) result(zr, c) = p;
@@ -208,7 +205,7 @@ Mat FillGapsInDisparityImage(const Mat& img)
             }
         }
         for (int r = result.rows - 1; r >= 0; r--) {
-            const ushort& p = result(r, c);
+            const double& p = result(r, c);
 
             if (p > 0) {
                 for (int zr = r + 1; zr < result.rows; zr++) result(zr, c) = p;
@@ -218,5 +215,13 @@ Mat FillGapsInDisparityImage(const Mat& img)
     }
 
     return result;
+}
+
+cv::Mat AdjustDisparityImage(const cv::Mat& img)
+{
+    cv::Mat imgConv;
+
+    img.convertTo(imgConv, CV_64FC1, 1 / 256.);
+    return FillGapsInDisparityImage(imgConv);
 }
 

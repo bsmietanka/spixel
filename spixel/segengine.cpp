@@ -68,7 +68,7 @@ SPSegmentationEngine::SPSegmentationEngine(SPSegmentationParameters params, Mat 
     params(params), origImg(im)
 {
     img = ConvertRGBToLab(im);
-    depthImg = FillGapsInDisparityImage(depthIm);
+    depthImg = AdjustDisparityImage(depthIm);
 }
 
 SPSegmentationEngine::~SPSegmentationEngine()

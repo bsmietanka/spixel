@@ -246,13 +246,13 @@ struct Pixel { // : public custom_alloc {
         */
     }
 
-    double CalcDispSum(const cv::Mat1w& dispImg, const Plane_d& plane, double beta) const
+    double CalcDispSum(const cv::Mat1d& dispImg, const Plane_d& plane, double beta) const
     {
         double sumDisp = 0.0;
 
         for (int i = ulr; i < (int)lrr; i++) {
             for (int j = ulc; j < (int)lrc; j++) {
-                const ushort& disp = dispImg(i, j);
+                const double& disp = dispImg(i, j);
 
                 if (disp > 0) {
                     double delta = DotProduct(plane, i, j, 1.0) - disp;
@@ -330,7 +330,7 @@ struct Pixel { // : public custom_alloc {
     //    }
     //}
 
-    void AddDispPixels(const cv::Mat1w& dispImg, vector<cv::Point3d>& pixels)
+    void AddDispPixels(const cv::Mat1d& dispImg, vector<cv::Point3d>& pixels)
     {
         for (int i = ulr; i < (int)lrr; i++) {
             for (int j = ulc; j < (int)lrc; j++) {
@@ -347,7 +347,7 @@ struct Pixel { // : public custom_alloc {
         pd.size = GetSize();
     }
 
-    inline void CalcPixelDataStereo(const cv::Mat& img, const cv::Mat1w& imgDisp, 
+    inline void CalcPixelDataStereo(const cv::Mat& img, const cv::Mat1d& imgDisp, 
         Plane_d& planeP, Plane_d& planeQ, double beta, PixelData& pd)
     {
         CalcPixelData(img, pd);
@@ -582,7 +582,7 @@ public:
     }
 
     void SetPlane(Plane_d& plane);
-    void UpdateDispSum(const cv::Mat1w& depthImg, double beta);
+    void UpdateDispSum(const cv::Mat1d& depthImg, double beta);
 
     void ClearPixelSet() { pixels.clear(); }
     void AddToPixelSet(Pixel* p1) { pixels.insert(p1); }
@@ -593,10 +593,10 @@ public:
         pixels.insert(p3); pixels.insert(p4);
     }
 
-    void GetRemovePixelDataStereo(const PixelData& pd, const cv::Mat1w& dispImg,
+    void GetRemovePixelDataStereo(const PixelData& pd, const cv::Mat1d& dispImg,
         const Matrix<Pixel>& pixelsImg, Pixel* p, Pixel* q,
         PixelChangeDataStereo& pcd) const;
-    void GetAddPixelDataStereo(const PixelData& pd, const cv::Mat1w& dispImg,
+    void GetAddPixelDataStereo(const PixelData& pd, const cv::Mat1d& dispImg,
         const Matrix<Pixel>& pixelsImg, Pixel* p, Pixel* q,
         PixelChangeDataStereo& pcd) const;
 

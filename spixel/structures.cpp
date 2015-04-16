@@ -115,7 +115,7 @@ void SuperpixelStereo::SetPlane(Plane_d& plane_)
     plane = plane_;
 }
 
-void SuperpixelStereo::UpdateDispSum(const cv::Mat1w& depthImg, double beta)
+void SuperpixelStereo::UpdateDispSum(const cv::Mat1d& depthImg, double beta)
 {
     sumDisp = 0;
     for (Pixel* p : pixels) {
@@ -124,7 +124,7 @@ void SuperpixelStereo::UpdateDispSum(const cv::Mat1w& depthImg, double beta)
 }
 
 void SuperpixelStereo::GetRemovePixelDataStereo(const PixelData& pd, 
-    const cv::Mat1w& dispImg,
+    const cv::Mat1d& dispImg,
     const Matrix<Pixel>& pixelsImg,
     Pixel* p, Pixel* q, 
     PixelChangeDataStereo& pcd) const 
@@ -193,7 +193,7 @@ void SuperpixelStereo::GetRemovePixelDataStereo(const PixelData& pd,
 }
 
 void SuperpixelStereo::GetAddPixelDataStereo(const PixelData& pd,
-    const cv::Mat1w& dispImg,
+    const cv::Mat1d& dispImg,
     const Matrix<Pixel>& pixelsImg,
     Pixel* p, Pixel* q,
     PixelChangeDataStereo& pcd) const

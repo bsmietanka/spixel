@@ -20,7 +20,7 @@ void test()
 {
     Mat img = imread("C:\\Work\\C\\speedup\\ours\\speedup\\x64\\Release\\000002_10L_left_disparity.png", CV_LOAD_IMAGE_ANYDEPTH);
 
-    Mat imgt = FillGapsInDisparityImage(img);
+    Mat imgt = AdjustDisparityImage(img);
     imwrite("c:\\tmp\\intp.png", imgt);
 }
 

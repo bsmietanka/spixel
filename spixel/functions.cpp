@@ -241,7 +241,7 @@ bool TryMovePixel(const cv::Mat& img, const Matrix<Pixel>& pixelsImg, Pixel* p, 
     return true;
 }
 
-bool TryMovePixelStereo(const cv::Mat& img, const cv::Mat1w& dispImg, const Matrix<Pixel>& pixelsImg, 
+bool TryMovePixelStereo(const cv::Mat& img, const cv::Mat1d& dispImg, const Matrix<Pixel>& pixelsImg, 
     Pixel* p, Pixel* q, double beta, PixelMoveData& psd)
 {
     SuperpixelStereo* sp = (SuperpixelStereo*)p->superPixel;
@@ -459,7 +459,7 @@ bool RANSACPlane(const vector<cv::Point3d>& pixels, Plane_d& plane)
 }
 
 
-bool UpdateSuperpixelPlaneRANSAC(SuperpixelStereo* sp, const cv::Mat1w& depthImg, double beta)
+bool UpdateSuperpixelPlaneRANSAC(SuperpixelStereo* sp, const cv::Mat1d& depthImg, double beta)
 {
     vector<cv::Point3d> pixels;
     Plane_d plane;
@@ -475,15 +475,16 @@ bool UpdateSuperpixelPlaneRANSAC(SuperpixelStereo* sp, const cv::Mat1w& depthImg
     return true;
 }
 
-double CalcDispEnergy(SuperpixelStereo* sp, cv::Mat1w& dispImg, double beta)
+double CalcDispEnergy(SuperpixelStereo* sp, cv::Mat1d& dispImg, double beta)
 {
     double result = 0.0;
 
     for (Pixel* p : sp->pixels) {
-        const ushort& disp = dispImg(p->row, p->col);
+        const double& disp = dispImg(p->row, p->col);
 
         if (disp == 0) continue;
-        double delta = DotProduct(sp->plane, p->row, p->col, 1.0) - disp*disp;
+        double delta = (DotProduct(sp->plane, p->row, p->col, 1.0) - disp);
+        delta *= delta;
         result += max(beta, delta);
     }
     return result;
