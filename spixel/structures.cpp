@@ -80,6 +80,36 @@ void Pixel::SplitColumn(const cv::Mat& img, int row, int col1, int col2, Pixel& 
     p12.border = border & (BTopFlag | BRightFlag);
 }
 
+void Pixel::UpdateInliers(const cv::Mat1d& dispImg, double threshold, cv::Mat1b& inliers) const
+{
+    const Plane_d& plane = ((SuperpixelStereo*)superPixel)->plane;
+
+    for (int i = ulr; i < (int)lrr; i++) {
+        for (int j = ulc; j < (int)lrc; j++) {
+            const double& disp = dispImg(i, j);
+            inliers(i, j) = fabs(DotProduct(plane, i, j, 1.0) - disp) < threshold;
+        }
+    }
+}
+
+void Pixel::AddToInlierSums(const cv::Mat1d& dispImg, const cv::Mat1b& inliers,
+    int& sumIRow, int& sumIRow2, int& sumICol, int& sumICol2, int& sumIRowCol, double& sumIRowD, double& sumIColD, double& sumID, int& nI)
+{
+    for (int i = ulr; i < (int)lrr; i++) {
+        for (int j = ulc; j < (int)lrc; j++) {
+            if (inliers(i, j) > 0) {
+                const double& disp = dispImg(i, j);
+                sumIRow += i; sumIRow2 += i*i;
+                sumICol += j; sumICol2 += j*j;
+                sumIRowCol += i*j;
+                sumIRowD += i*disp; sumIColD += j*disp;
+                sumID += disp; 
+                nI++;
+            }
+        }
+    }
+}
+
 
 //DEFINE_CLASS_ALLOCATOR_2(Pixel, 10000000)
 
@@ -115,18 +145,47 @@ void SuperpixelStereo::SetPlane(Plane_d& plane_)
     plane = plane_;
 }
 
-void SuperpixelStereo::UpdateDispSum(const cv::Mat1d& depthImg, double beta)
+void SuperpixelStereo::UpdateDispSum(const cv::Mat1d& depthImg, const cv::Mat1b& inliers, double beta)
 {
     sumDisp = 0;
     for (Pixel* p : pixels) {
-        sumDisp += p->CalcDispSum(depthImg, plane, beta);
+        sumDisp += p->CalcDispSum(depthImg, inliers, plane, beta);
     }
 }
 
+void SuperpixelStereo::UpdateInliers(const cv::Mat1d& depthImg, double threshold, cv::Mat1b& inliers)
+{
+    for (Pixel* p : pixels) {
+        p->UpdateInliers(depthImg, threshold, inliers);
+        UpdateInlierSums(depthImg, inliers);
+    }
+}
+
+void SuperpixelStereo::UpdateInlierSums(const cv::Mat1d& depthImg, const cv::Mat1b& inliers)
+{
+    sumIRow = sumICol = 0;
+    sumIRow2 = sumICol2 = 0;
+    sumIRowCol = 0;
+    sumIRowD = sumIColD = 0.0;
+    sumID = 0.0;
+    nI = 0;
+    for (Pixel* p : pixels) {
+        p->AddToInlierSums(depthImg, inliers,
+            sumIRow, sumIRow2, sumICol, sumICol2, sumIRowCol, sumIRowD, sumIColD, sumID, nI);
+    }
+}
+
+void SuperpixelStereo::CalcPlaneLeastSquares(const cv::Mat1d& depthImg, const cv::Mat1b& inliers)
+{
+    UpdateInlierSums(depthImg, inliers);
+    LeastSquaresPlane(sumIRow, sumIRow2, sumICol, sumICol2, sumIRowCol, sumIRowD, sumIColD, sumID, nI, plane);
+}
+
 void SuperpixelStereo::GetRemovePixelDataStereo(const PixelData& pd, 
-    const cv::Mat1d& dispImg,
     const Matrix<Pixel>& pixelsImg,
-    Pixel* p, Pixel* q, 
+    const cv::Mat1d& dispImg,
+    const cv::Mat1b& inliers,
+    Pixel* p, Pixel* q,
     PixelChangeDataStereo& pcd) const 
 {
     GetRemovePixelData(pd, pcd);
@@ -140,7 +199,7 @@ void SuperpixelStereo::GetRemovePixelDataStereo(const PixelData& pd,
     int sqBType = pcd.newBoundaryData[sq].type;
 
     if (sqBType == BTCo) {
-        pcd.newBoundaryData[sq].smo -= p->CalcCoSmoothnessSum(sp->plane, sq->plane);
+        pcd.newBoundaryData[sq].smo -= p->CalcCoSmoothnessSum(inliers, sp->plane, sq->plane);
     } else if (sqBType == BTHi) {
         double sum = 0;
         int count = 0;
@@ -193,8 +252,9 @@ void SuperpixelStereo::GetRemovePixelDataStereo(const PixelData& pd,
 }
 
 void SuperpixelStereo::GetAddPixelDataStereo(const PixelData& pd,
-    const cv::Mat1d& dispImg,
     const Matrix<Pixel>& pixelsImg,
+    const cv::Mat1d& dispImg,
+    const cv::Mat1b& inliers,
     Pixel* p, Pixel* q,
     PixelChangeDataStereo& pcd) const
 {
@@ -209,7 +269,7 @@ void SuperpixelStereo::GetAddPixelDataStereo(const PixelData& pd,
     int sqBType = pcd.newBoundaryData[sq].type;
 
     if (sqBType == BTCo) {
-        pcd.newBoundaryData[sq].smo += p->CalcCoSmoothnessSum(sp->plane, sq->plane);
+        pcd.newBoundaryData[sq].smo += p->CalcCoSmoothnessSum(inliers, sp->plane, sq->plane);
     } else if (sqBType == BTHi) {
         double sum = 0;
         int count = 0;
@@ -260,5 +320,6 @@ void SuperpixelStereo::GetAddPixelDataStereo(const PixelData& pd,
         }
     }
 }
+
 
 

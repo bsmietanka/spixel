@@ -69,6 +69,7 @@ SPSegmentationEngine::SPSegmentationEngine(SPSegmentationParameters params, Mat 
 {
     img = ConvertRGBToLab(im);
     depthImg = AdjustDisparityImage(depthIm);
+    inliers = Mat1b(depthImg.rows, depthImg.cols);
 }
 
 SPSegmentationEngine::~SPSegmentationEngine()
@@ -233,7 +234,12 @@ int SPSegmentationEngine::PixelSize()
 
 void SPSegmentationEngine::ReEstimatePlaneParameters()
 {
-    //EstimatePlaneParameters();
+    #pragma omp parallel for
+    for (int i = 0; i < superpixels.size(); i++) {
+        SuperpixelStereo* sp = (SuperpixelStereo*)superpixels[i];
+        sp->CalcPlaneLeastSquares(depthImg, inliers);
+        sp->UpdateInliers(depthImg, params.inlierThreshold, inliers);
+    }
 }
 
 void SPSegmentationEngine::EstimatePlaneParameters()
@@ -246,7 +252,9 @@ void SPSegmentationEngine::EstimatePlaneParameters()
 
     #pragma omp parallel for
     for (int i = 0; i < superpixels.size(); i++) {
-        UpdateSuperpixelPlaneRANSAC((SuperpixelStereo*)superpixels[i], depthImg, params.dispBeta);
+        SuperpixelStereo* sp = (SuperpixelStereo*)superpixels[i];
+        UpdateSuperpixelPlaneRANSAC(sp, depthImg, params.dispBeta);
+        sp->UpdateInliers(depthImg, params.inlierThreshold, inliers);
     }
 
     t.Stop();
@@ -284,7 +292,7 @@ void SPSegmentationEngine::EstimatePlaneParameters()
         SuperpixelStereo* sp = item.first.first;
         SuperpixelStereo* sq = item.first.second;
 
-        double eSmoCoSum = CalcCoSmoothnessSum(sp, sq);
+        double eSmoCoSum = CalcCoSmoothnessSum(inliers, sp, sq);
         double eSmoHiSum = item.second.hiSum;
         double eSmoOcc = 1; // Phi!?
 
@@ -421,7 +429,7 @@ void SPSegmentationEngine::IterateMoves()
                 }
                 if (!newNeighbor) tryMoveData[m].allowed = false;
                 else {
-                    if (params.stereo) TryMovePixelStereo(img, depthImg, pixelsImg, p, q, params.dispBeta, tryMoveData[m]); 
+                    if (params.stereo) TryMovePixelStereo(img, depthImg, inliers, pixelsImg, p, q, params.dispBeta, tryMoveData[m]); 
                     else TryMovePixel(img, pixelsImg, p, q, tryMoveData[m]);
                     nbsp[nbspSize++] = q->superPixel;
                 }
@@ -561,6 +569,13 @@ void SPSegmentationEngine::PrintPerformanceInfo()
     for (double& t : performanceInfo.levels)
         cout << t << ' ';
     cout << endl;
+}
+
+void SPSegmentationEngine::InitializeInliers()
+{
+    for (const Pixel& p : pixelsImg) {
+        p.UpdateInliers(depthImg, params.inlierThreshold, inliers);
+    }
 }
 
 // Functions

@@ -66,7 +66,7 @@ private:
 // See definition for description
 // bool TryMovePixel(const cv::Mat_<Pixel*>& pixelsImg, Pixel* p, int qRow, int qCol, PixelMoveData& psd);
 bool TryMovePixel(const cv::Mat& img, const Matrix<Pixel>& pixelsImg, Pixel* p, Pixel* q, PixelMoveData& psd);
-bool TryMovePixelStereo(const cv::Mat& img, const cv::Mat1d& dispImg, const Matrix<Pixel>& pixelsImg,
+bool TryMovePixelStereo(const cv::Mat& img, const cv::Mat1d& dispImg, const cv::Mat1b& inliers, const Matrix<Pixel>& pixelsImg,
     Pixel* p, Pixel* q, double beta, PixelMoveData& psd);
 
 // See definition for description
@@ -92,9 +92,11 @@ bool Plane3P(const cv::Point3d& p1, const cv::Point3d& p2, const cv::Point3d& p3
 bool RANSACPlane(const vector<cv::Point3d>& pixels, Plane_d& plane);
 bool UpdateSuperpixelPlaneRANSAC(SuperpixelStereo* sp, const cv::Mat1d& depthImg, double beta);
 
+void LeastSquaresPlane(int sumIRow, int sumIRow2, int sumICol, int sumICol2, int sumIRowCol, double sumIRowD, double sumIColD,
+    double sumID, int nI, Plane_d& plane);
+
 // Equation (8) for superpixel sp
 void CalcDispEnergy(SuperpixelStereo* sp, const cv::Mat1d& dispImg, double beta);
 
-double CalcCoSmoothnessSum(SuperpixelStereo* sp, SuperpixelStereo* sq);
-
+double CalcCoSmoothnessSum(const cv::Mat1b& inliers, SuperpixelStereo* sp, SuperpixelStereo* sq);
 

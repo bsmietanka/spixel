@@ -168,7 +168,7 @@ void CalcSuperpixelBoundaryLength(const Matrix<Pixel>& pixelsImg, Pixel* p, Supe
 {
     spbl = sqbl = sobl = 0;
     
-    const Pixel* q;
+    const Pixel* q; 
 
     q = PixelAt(pixelsImg, p->row - 1, p->col);
     if (q == nullptr || (q->superPixel != sp && q->superPixel != sq)) sobl += p->GetCSize(); 
@@ -241,7 +241,7 @@ bool TryMovePixel(const cv::Mat& img, const Matrix<Pixel>& pixelsImg, Pixel* p, 
     return true;
 }
 
-bool TryMovePixelStereo(const cv::Mat& img, const cv::Mat1d& dispImg, const Matrix<Pixel>& pixelsImg, 
+bool TryMovePixelStereo(const cv::Mat& img, const cv::Mat1d& dispImg, const cv::Mat1b& inliers, const Matrix<Pixel>& pixelsImg, 
     Pixel* p, Pixel* q, double beta, PixelMoveData& psd)
 {
     SuperpixelStereo* sp = (SuperpixelStereo*)p->superPixel;
@@ -264,9 +264,9 @@ bool TryMovePixelStereo(const cv::Mat& img, const cv::Mat1d& dispImg, const Matr
     PixelData pd;
     int spbl, sqbl, sobl;
 
-    p->CalcPixelDataStereo(img, dispImg, sp->plane, sq->plane, beta, pd);
-    sp->GetRemovePixelDataStereo(pd, dispImg, pixelsImg, p, q, pcd);
-    sq->GetAddPixelDataStereo(pd, dispImg, pixelsImg, p, q, qcd);
+    p->CalcPixelDataStereo(img, dispImg, inliers, sp->plane, sq->plane, beta, pd);
+    sp->GetRemovePixelDataStereo(pd, pixelsImg, dispImg, inliers, p, q, pcd);
+    sq->GetAddPixelDataStereo(pd, pixelsImg, dispImg, inliers, p, q, qcd);
     CalcSuperpixelBoundaryLength(pixelsImg, p, sp, sq, spbl, sqbl, sobl);
 
     psd.p = p;
@@ -419,7 +419,7 @@ int EstimateRANSACSteps(int n, int nInliers, int nPoints, double p)
 // form a plane; pixels are (xi, yi, di)
 // Plane parameters (a, b, c) satisfy equations (xi, yi, 1).(a, b, c) == di
 // for selected three points
-bool RANSACPlane(const vector<cv::Point3d>& pixels, Plane_d& plane)
+bool RANSACPlane(const vector<cv::Point3d>& pixels, Plane_d& plane, cv::Mat1b& inliers)
 {
     const double inlierThreshold = 1.0;
     const double confidence = 0.99;
@@ -428,6 +428,7 @@ bool RANSACPlane(const vector<cv::Point3d>& pixels, Plane_d& plane)
         return false;
 
     int bestInlierCount = 0;
+    cv::Mat1b tmpInliers = cv::Mat1b(inliers.rows, inliers.cols, (uchar)0);
     Plane_d stepPlane;
     int N = 2*pixels.size();
     int n = 0;
@@ -439,14 +440,17 @@ bool RANSACPlane(const vector<cv::Point3d>& pixels, Plane_d& plane)
 
         if (Plane3P(p1, p2, p3, stepPlane)) {
             int inlierCount = 0;
+            tmpInliers.setTo(cv::Scalar(0));
             for (const cv::Point3d& p : pixels) {
                 if (fabs(p.x*stepPlane.x + p.y*stepPlane.y + stepPlane.z - p.z) < inlierThreshold) {
+                    tmpInliers((int)p.x, (int)p.y) = 1;
                     inlierCount++;
                 }
             }
             if (inlierCount > bestInlierCount) {
                 bestInlierCount = inlierCount;
                 plane = stepPlane;
+                std::swap(inliers, tmpInliers);
 
                 int NN = EstimateRANSACSteps(3, bestInlierCount, pixels.size(), confidence);
                 
@@ -458,20 +462,20 @@ bool RANSACPlane(const vector<cv::Point3d>& pixels, Plane_d& plane)
     return bestInlierCount > 0;
 }
 
-
+// Should be thread-safe!
 bool UpdateSuperpixelPlaneRANSAC(SuperpixelStereo* sp, const cv::Mat1d& depthImg, double beta)
 {
     vector<cv::Point3d> pixels;
     Plane_d plane;
+    cv::Mat1b ransacInliers = cv::Mat1b(depthImg.rows, depthImg.cols);
 
     pixels.reserve(sp->GetSize());
     for (Pixel* p : sp->pixels) {
         p->AddDispPixels(depthImg, pixels);
 
     }
-    if (!RANSACPlane(pixels, plane)) return false;
-    sp->SetPlane(plane);
-    sp->UpdateDispSum(depthImg, beta);
+    if (!RANSACPlane(pixels, plane, ransacInliers)) return false;
+    sp->CalcPlaneLeastSquares(depthImg, ransacInliers);
     return true;
 }
 
@@ -497,7 +501,7 @@ void CalcOccSmoothnessEnergy(SuperpixelStereo* sp, SuperpixelStereo* sq, double 
     eSmo = 0;
 }
 
-double CalcCoSmoothnessSum(SuperpixelStereo* sp, SuperpixelStereo* sq)
+double CalcCoSmoothnessSum(const cv::Mat1b& inliers, SuperpixelStereo* sp, SuperpixelStereo* sq)
 {
     if (sp->pixels.empty() && sq->pixels.empty())
         return 0.0;
@@ -505,10 +509,10 @@ double CalcCoSmoothnessSum(SuperpixelStereo* sp, SuperpixelStereo* sq)
     double eSmo = 0;
 
     for (Pixel* p : sp->pixels) {
-        eSmo += p->CalcCoSmoothnessSum(sp->plane, sq->plane);
+        eSmo += p->CalcCoSmoothnessSum(inliers, sp->plane, sq->plane);
     }
     for (Pixel* q : sq->pixels) {
-        eSmo += q->CalcCoSmoothnessSum(sp->plane, sq->plane);
+        eSmo += q->CalcCoSmoothnessSum(inliers, sp->plane, sq->plane);
     }
     return eSmo;
 }
@@ -531,3 +535,19 @@ void CalcBTEnergy(SuperpixelStereo* sp, SuperpixelStereo* sq, double occWeight, 
     }
 }
 */
+
+void LeastSquaresPlane(int sumIRow, int sumIRow2, int sumICol, int sumICol2, int sumIRowCol, double sumIRowD, double sumIColD,
+    double sumID, int nI, Plane_d& plane)
+{
+    cv::Mat1d left = (cv::Mat1d(3, 3) << sumIRow2, sumIRowCol, sumIRow, sumIRowCol, sumICol2, sumICol, sumIRow, sumICol, nI);
+    cv::Mat1d right = (cv::Mat1d(3, 1) << sumIRowD, sumIColD, sumID);
+    cv::Mat1d result;
+
+    if (cv::solve(left, right, result, cv::DECOMP_CHOLESKY)) {
+        plane.x = result(0, 0);
+        plane.y = result(1, 0);
+        plane.z = result(2, 0);
+    } else {
+        plane.x = plane.y = plane.z = 0.0;
+    }
+}

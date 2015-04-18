@@ -246,16 +246,16 @@ struct Pixel { // : public custom_alloc {
         */
     }
 
-    double CalcDispSum(const cv::Mat1d& dispImg, const Plane_d& plane, double beta) const
+    double CalcDispSum(const cv::Mat1d& dispImg, const cv::Mat1b& inliers, const Plane_d& plane, double beta) const
     {
         double sumDisp = 0.0;
 
         for (int i = ulr; i < (int)lrr; i++) {
             for (int j = ulc; j < (int)lrc; j++) {
-                const double& disp = dispImg(i, j);
-
-                if (disp > 0) {
+                if (inliers(i, j) > 0) {
+                    const double& disp = dispImg(i, j);
                     double delta = DotProduct(plane, i, j, 1.0) - disp;
+
                     delta *= delta;
                     sumDisp += beta > delta ? beta : delta;
                 }
@@ -297,14 +297,16 @@ struct Pixel { // : public custom_alloc {
         }
     }
 
-    double CalcCoSmoothnessSum(const Plane_d& planep, const Plane_d& planeq) const
+    double CalcCoSmoothnessSum(const cv::Mat1b& inliers, const Plane_d& planep, const Plane_d& planeq) const
     {
         double sum = 0.0;
 
         for (int i = ulr; i < (int)lrr; i++) {
             for (int j = ulc; j < (int)lrc; j++) {
-                double ddelta = DotProduct(planep, i, j, 1.0) - DotProduct(planeq, i, j, 1.0);
-                sum += ddelta*ddelta;
+                if (inliers(i, j) > 0) {
+                    double ddelta = DotProduct(planep, i, j, 1.0) - DotProduct(planeq, i, j, 1.0);
+                    sum += ddelta*ddelta;
+                }
             }
         } 
         return sum;
@@ -347,12 +349,12 @@ struct Pixel { // : public custom_alloc {
         pd.size = GetSize();
     }
 
-    inline void CalcPixelDataStereo(const cv::Mat& img, const cv::Mat1d& imgDisp, 
+    inline void CalcPixelDataStereo(const cv::Mat& img, const cv::Mat1d& imgDisp, const cv::Mat1b& inliers,
         Plane_d& planeP, Plane_d& planeQ, double beta, PixelData& pd)
     {
         CalcPixelData(img, pd);
-        pd.sumDispP = CalcDispSum(imgDisp, planeP, beta);
-        pd.sumDispQ = CalcDispSum(imgDisp, planeQ, beta);
+        pd.sumDispP = CalcDispSum(imgDisp, inliers, planeP, beta);
+        pd.sumDispQ = CalcDispSum(imgDisp, inliers, planeQ, beta);
     }
 
     // Border operations
@@ -379,6 +381,9 @@ struct Pixel { // : public custom_alloc {
     void SplitRow(const cv::Mat& img, int row1, int row2, int col, Pixel& p11, Pixel& p21);
     void SplitColumn(const cv::Mat& img, int row, int col1, int col2, Pixel& p11, Pixel& p12);
     void CopyTo(const cv::Mat& img, int row, int col, Pixel& p11);
+    void UpdateInliers(const cv::Mat1d& dispImg, double threshold, cv::Mat1b& inliers) const;
+    void AddToInlierSums(const cv::Mat1d& depthImg, const cv::Mat1b& inliers,
+        int& sumIRow, int& sumIRow2, int& sumICol, int& sumICol2, int& sumIRowCol, double& sumIRowD, double& sumIColD, double& sumID, int& nI); 
     string GetPixelsAsString();
 
     //CLASS_ALLOCATION()
@@ -528,7 +533,16 @@ public:
 
 class SuperpixelStereo : public Superpixel {
 public:
-    double sumDisp = 0.0;       // Sum of all disparity energy terms, Eq. (8) equals disp energy
+    double sumDisp = 0.0;
+    int sumIRow = 0, sumICol = 0;         // Sum of terms computed for inlier points
+    int sumIRow2 = 0, sumICol2 = 0;
+    int sumIRowCol = 0;
+    double sumIRowD = 0.0, sumIColD = 0.0;
+    double sumID = 0.0;
+    int nI = 0;
+
+    //double sumIRow = 0.0;
+
 
     unordered_set<Pixel*> pixels;
     BInfoMapType boundaryData;
@@ -582,7 +596,10 @@ public:
     }
 
     void SetPlane(Plane_d& plane);
-    void UpdateDispSum(const cv::Mat1d& depthImg, double beta);
+    void UpdateDispSum(const cv::Mat1d& depthImg, const cv::Mat1b& inliers, double beta);
+    void UpdateInlierSums(const cv::Mat1d& depthImg, const cv::Mat1b& inliers);
+    void UpdateInliers(const cv::Mat1d& depthImg, double threshold, cv::Mat1b& inliers);
+    void CalcPlaneLeastSquares(const cv::Mat1d& depthImg, const cv::Mat1b& inliers);
 
     void ClearPixelSet() { pixels.clear(); }
     void AddToPixelSet(Pixel* p1) { pixels.insert(p1); }
@@ -593,11 +610,13 @@ public:
         pixels.insert(p3); pixels.insert(p4);
     }
 
-    void GetRemovePixelDataStereo(const PixelData& pd, const cv::Mat1d& dispImg,
-        const Matrix<Pixel>& pixelsImg, Pixel* p, Pixel* q,
+    void GetRemovePixelDataStereo(const PixelData& pd, 
+        const Matrix<Pixel>& pixelsImg, const cv::Mat1d& dispImg, const cv::Mat1b& inliers,
+        Pixel* p, Pixel* q,
         PixelChangeDataStereo& pcd) const;
-    void GetAddPixelDataStereo(const PixelData& pd, const cv::Mat1d& dispImg,
-        const Matrix<Pixel>& pixelsImg, Pixel* p, Pixel* q,
+    void GetAddPixelDataStereo(const PixelData& pd, 
+        const Matrix<Pixel>& pixelsImg, const cv::Mat1d& dispImg, const cv::Mat1b& inliers,
+        Pixel* p, Pixel* q,
         PixelChangeDataStereo& pcd) const;
 
 };

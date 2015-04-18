@@ -19,6 +19,7 @@ struct SPSegmentationParameters {
     double occPriorWeight = 1.0;
     double hiPriorWeight = 1.0;
     double dispBeta = 1.0;
+    double inlierThreshold = 3.0;
 
     int iterations = 1;
 
@@ -40,6 +41,7 @@ struct SPSegmentationParameters {
         dispBeta = (double)node["dispBeta"];
         stereo = (int)node["stereo"] != 0;
         iterations = (int)node["iterations"];
+        inlierThreshold = (int)node["inlierThreshold"];
     }
 };
 
@@ -71,7 +73,8 @@ private:
     Mat img;
 
     // Support structures
-    Matrix<Pixel> pixelsImg;     // pixels matrix, dimension varies, depends on level
+    Matrix<Pixel> pixelsImg;    // pixels matrix, dimension varies, depends on level
+    Mat1b inliers;              // boolean matrix of "inliers" (for stereo)
 
     // Info
     vector<Superpixel*> superpixels;
@@ -97,6 +100,7 @@ private:
     void SplitPixels();
     int PixelSize();
     void Reset();
+    void InitializeInliers();
 };
 
 
