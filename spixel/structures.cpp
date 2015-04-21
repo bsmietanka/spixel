@@ -92,25 +92,6 @@ void Pixel::UpdateInliers(const cv::Mat1d& dispImg, double threshold, cv::Mat1b&
     }
 }
 
-void Pixel::AddToInlierSums(const cv::Mat1d& dispImg, const cv::Mat1b& inliers,
-    int& sumIRow, int& sumIRow2, int& sumICol, int& sumICol2, int& sumIRowCol, double& sumIRowD, double& sumIColD, double& sumID, int& nI)
-{
-    for (int i = ulr; i < (int)lrr; i++) {
-        for (int j = ulc; j < (int)lrc; j++) {
-            if (inliers(i, j) > 0) {
-                const double& disp = dispImg(i, j);
-                sumIRow += i; sumIRow2 += i*i;
-                sumICol += j; sumICol2 += j*j;
-                sumIRowCol += i*j;
-                sumIRowD += i*disp; sumIColD += j*disp;
-                sumID += disp; 
-                nI++;
-            }
-        }
-    }
-}
-
-
 //DEFINE_CLASS_ALLOCATOR_2(Pixel, 10000000)
 
 // Superpixel defininions
@@ -153,31 +134,22 @@ void SuperpixelStereo::UpdateDispSum(const cv::Mat1d& depthImg, const cv::Mat1b&
     }
 }
 
-void SuperpixelStereo::UpdateInliers(const cv::Mat1d& depthImg, double threshold, cv::Mat1b& inliers)
-{
-    for (Pixel* p : pixels) {
-        p->UpdateInliers(depthImg, threshold, inliers);
-        UpdateInlierSums(depthImg, inliers);
-    }
-}
-
-void SuperpixelStereo::UpdateInlierSums(const cv::Mat1d& depthImg, const cv::Mat1b& inliers)
-{
-    sumIRow = sumICol = 0;
-    sumIRow2 = sumICol2 = 0;
-    sumIRowCol = 0;
-    sumIRowD = sumIColD = 0.0;
-    sumID = 0.0;
-    nI = 0;
-    for (Pixel* p : pixels) {
-        p->AddToInlierSums(depthImg, inliers,
-            sumIRow, sumIRow2, sumICol, sumICol2, sumIRowCol, sumIRowD, sumIColD, sumID, nI);
-    }
-}
+//void SuperpixelStereo::UpdateInlierSums(const cv::Mat1d& depthImg, const cv::Mat1b& inliers)
+//{
+//    sumIRow = sumICol = 0;
+//    sumIRow2 = sumICol2 = 0;
+//    sumIRowCol = 0;
+//    sumIRowD = sumIColD = 0.0;
+//    sumID = 0.0;
+//    nI = 0;
+//    for (Pixel* p : pixels) {
+//        p->AddToInlierSums(depthImg, inliers,
+//            sumIRow, sumIRow2, sumICol, sumICol2, sumIRowCol, sumIRowD, sumIColD, sumID, nI);
+//    }
+//}
 
 void SuperpixelStereo::CalcPlaneLeastSquares(const cv::Mat1d& depthImg, const cv::Mat1b& inliers)
 {
-    UpdateInlierSums(depthImg, inliers);
     LeastSquaresPlane(sumIRow, sumIRow2, sumICol, sumICol2, sumIRowCol, sumIRowD, sumIColD, sumID, nI, plane);
 }
 
@@ -206,44 +178,44 @@ void SuperpixelStereo::GetRemovePixelDataStereo(const PixelData& pd,
 
         if ((r = PixelAt(pixelsImg, p->row, p->col + 1)) != nullptr) {
             if (r->superPixel == sq) {
-                r->CalcHiSmoothnessSum(BLeftFlag, sp->plane, sq->plane, sum, count);
+                r->CalcHiSmoothnessSum(BLeftFlag, inliers, sp->plane, sq->plane, sum, count);
                 pcd.newBoundaryData[sq].smo -= sum;
                 pcd.newBoundaryData[sq].length -= count;
             } else if (r->superPixel == sp) {
-                r->CalcHiSmoothnessSum(BLeftFlag, sp->plane, sq->plane, sum, count);
+                r->CalcHiSmoothnessSum(BLeftFlag, inliers, sp->plane, sq->plane, sum, count);
                 pcd.newBoundaryData[sq].smo += sum;
                 pcd.newBoundaryData[sq].length += count;
             }
         }
         if ((r = PixelAt(pixelsImg, p->row, p->col - 1)) != nullptr) {
             if (r->superPixel == sq) {
-                p->CalcHiSmoothnessSum(BLeftFlag, sp->plane, sq->plane, sum, count);
+                p->CalcHiSmoothnessSum(BLeftFlag, inliers, sp->plane, sq->plane, sum, count);
                 pcd.newBoundaryData[sq].smo -= sum;
                 pcd.newBoundaryData[sq].length -= count;
             } else if (r->superPixel == sp) {
-                p->CalcHiSmoothnessSum(BLeftFlag, sp->plane, sq->plane, sum, count);
+                p->CalcHiSmoothnessSum(BLeftFlag, inliers, sp->plane, sq->plane, sum, count);
                 pcd.newBoundaryData[sq].smo += sum;
                 pcd.newBoundaryData[sq].length += count;
             }
         }
         if ((r = PixelAt(pixelsImg, p->row + 1, p->col)) != nullptr) {
             if (r->superPixel == sq) {
-                r->CalcHiSmoothnessSum(BTopFlag, sp->plane, sq->plane, sum, count);
+                r->CalcHiSmoothnessSum(BTopFlag, inliers, sp->plane, sq->plane, sum, count);
                 pcd.newBoundaryData[sq].smo -= sum;
                 pcd.newBoundaryData[sq].length -= count;
             } else if (r->superPixel == sp) {
-                r->CalcHiSmoothnessSum(BTopFlag, sp->plane, sq->plane, sum, count);
+                r->CalcHiSmoothnessSum(BTopFlag, inliers, sp->plane, sq->plane, sum, count);
                 pcd.newBoundaryData[sq].smo += sum;
                 pcd.newBoundaryData[sq].length += count;
             }
         }
         if ((r = PixelAt(pixelsImg, p->row - 1, p->col)) != nullptr) {
             if (r->superPixel == sq) {
-                p->CalcHiSmoothnessSum(BTopFlag, sp->plane, sq->plane, sum, count);
+                p->CalcHiSmoothnessSum(BTopFlag, inliers, sp->plane, sq->plane, sum, count);
                 pcd.newBoundaryData[sq].smo -= sum;
                 pcd.newBoundaryData[sq].length -= count;
             } else if (r->superPixel == sp) {
-                p->CalcHiSmoothnessSum(BTopFlag, sp->plane, sq->plane, sum, count);
+                p->CalcHiSmoothnessSum(BTopFlag, inliers, sp->plane, sq->plane, sum, count);
                 pcd.newBoundaryData[sq].smo += sum;
                 pcd.newBoundaryData[sq].length += count;
             }
@@ -276,44 +248,44 @@ void SuperpixelStereo::GetAddPixelDataStereo(const PixelData& pd,
 
         if ((r = PixelAt(pixelsImg, p->row, p->col + 1)) != nullptr) {
             if (r->superPixel == sq) {
-                r->CalcHiSmoothnessSum(BLeftFlag, sp->plane, sq->plane, sum, count);
+                r->CalcHiSmoothnessSum(BLeftFlag, inliers, sp->plane, sq->plane, sum, count);
                 pcd.newBoundaryData[sq].smo += sum;
                 pcd.newBoundaryData[sq].length += count;
             } else if (r->superPixel == sp) {
-                r->CalcHiSmoothnessSum(BLeftFlag, sp->plane, sq->plane, sum, count);
+                r->CalcHiSmoothnessSum(BLeftFlag, inliers, sp->plane, sq->plane, sum, count);
                 pcd.newBoundaryData[sq].smo -= sum;
                 pcd.newBoundaryData[sq].length -= count;
             }
         }
         if ((r = PixelAt(pixelsImg, p->row, p->col - 1)) != nullptr) {
             if (r->superPixel == sq) {
-                p->CalcHiSmoothnessSum(BLeftFlag, sp->plane, sq->plane, sum, count);
+                p->CalcHiSmoothnessSum(BLeftFlag, inliers, sp->plane, sq->plane, sum, count);
                 pcd.newBoundaryData[sq].smo += sum;
                 pcd.newBoundaryData[sq].length += count;
             } else if (r->superPixel == sp) {
-                p->CalcHiSmoothnessSum(BLeftFlag, sp->plane, sq->plane, sum, count);
+                p->CalcHiSmoothnessSum(BLeftFlag, inliers, sp->plane, sq->plane, sum, count);
                 pcd.newBoundaryData[sq].smo -= sum;
                 pcd.newBoundaryData[sq].length -= count;
             }
         }
         if ((r = PixelAt(pixelsImg, p->row + 1, p->col)) != nullptr) {
             if (r->superPixel == sq) {
-                r->CalcHiSmoothnessSum(BTopFlag, sp->plane, sq->plane, sum, count);
+                r->CalcHiSmoothnessSum(BTopFlag, inliers, sp->plane, sq->plane, sum, count);
                 pcd.newBoundaryData[sq].smo += sum;
                 pcd.newBoundaryData[sq].length += count;
             } else if (r->superPixel == sp) {
-                r->CalcHiSmoothnessSum(BTopFlag, sp->plane, sq->plane, sum, count);
+                r->CalcHiSmoothnessSum(BTopFlag, inliers, sp->plane, sq->plane, sum, count);
                 pcd.newBoundaryData[sq].smo -= sum;
                 pcd.newBoundaryData[sq].length -= count;
             }
         }
         if ((r = PixelAt(pixelsImg, p->row - 1, p->col)) != nullptr) {
             if (r->superPixel == sq) {
-                p->CalcHiSmoothnessSum(BTopFlag, sp->plane, sq->plane, sum, count);
+                p->CalcHiSmoothnessSum(BTopFlag, inliers, sp->plane, sq->plane, sum, count);
                 pcd.newBoundaryData[sq].smo += sum;
                 pcd.newBoundaryData[sq].length += count;
             } else if (r->superPixel == sp) {
-                p->CalcHiSmoothnessSum(BTopFlag, sp->plane, sq->plane, sum, count);
+                p->CalcHiSmoothnessSum(BTopFlag, inliers, sp->plane, sq->plane, sum, count);
                 pcd.newBoundaryData[sq].smo -= sum;
                 pcd.newBoundaryData[sq].length -= count;
             }

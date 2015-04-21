@@ -419,7 +419,7 @@ int EstimateRANSACSteps(int n, int nInliers, int nPoints, double p)
 // form a plane; pixels are (xi, yi, di)
 // Plane parameters (a, b, c) satisfy equations (xi, yi, 1).(a, b, c) == di
 // for selected three points
-bool RANSACPlane(const vector<cv::Point3d>& pixels, Plane_d& plane, cv::Mat1b& inliers)
+bool RANSACPlane(const vector<cv::Point3d>& pixels, Plane_d& plane)
 {
     const double inlierThreshold = 1.0;
     const double confidence = 0.99;
@@ -428,7 +428,6 @@ bool RANSACPlane(const vector<cv::Point3d>& pixels, Plane_d& plane, cv::Mat1b& i
         return false;
 
     int bestInlierCount = 0;
-    cv::Mat1b tmpInliers = cv::Mat1b(inliers.rows, inliers.cols, (uchar)0);
     Plane_d stepPlane;
     int N = 2*pixels.size();
     int n = 0;
@@ -440,17 +439,14 @@ bool RANSACPlane(const vector<cv::Point3d>& pixels, Plane_d& plane, cv::Mat1b& i
 
         if (Plane3P(p1, p2, p3, stepPlane)) {
             int inlierCount = 0;
-            tmpInliers.setTo(cv::Scalar(0));
             for (const cv::Point3d& p : pixels) {
                 if (fabs(p.x*stepPlane.x + p.y*stepPlane.y + stepPlane.z - p.z) < inlierThreshold) {
-                    tmpInliers((int)p.x, (int)p.y) = 1;
                     inlierCount++;
                 }
             }
             if (inlierCount > bestInlierCount) {
                 bestInlierCount = inlierCount;
                 plane = stepPlane;
-                std::swap(inliers, tmpInliers);
 
                 int NN = EstimateRANSACSteps(3, bestInlierCount, pixels.size(), confidence);
                 
@@ -467,15 +463,13 @@ bool UpdateSuperpixelPlaneRANSAC(SuperpixelStereo* sp, const cv::Mat1d& depthImg
 {
     vector<cv::Point3d> pixels;
     Plane_d plane;
-    cv::Mat1b ransacInliers = cv::Mat1b(depthImg.rows, depthImg.cols);
 
     pixels.reserve(sp->GetSize());
     for (Pixel* p : sp->pixels) {
         p->AddDispPixels(depthImg, pixels);
 
     }
-    if (!RANSACPlane(pixels, plane, ransacInliers)) return false;
-    sp->CalcPlaneLeastSquares(depthImg, ransacInliers);
+    if (!RANSACPlane(pixels, plane)) return false;
     return true;
 }
 

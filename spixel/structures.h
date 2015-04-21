@@ -264,7 +264,7 @@ struct Pixel { // : public custom_alloc {
         return sumDisp;
     }
 
-    void CalcHiSmoothnessSum(byte sideFlag, const Plane_d& planep, const Plane_d& planeq,
+    void CalcHiSmoothnessSum(byte sideFlag, const cv::Mat1b& inliers, const Plane_d& planep, const Plane_d& planeq,
         double& sum, int& count) const
     {
         sum = 0.0;
@@ -272,27 +272,35 @@ struct Pixel { // : public custom_alloc {
 
         if (sideFlag == BLeftFlag) {
             for (int i = ulr; i < (int)lrr; i++) {
-                double ddelta = DotProduct(planep, i, ulc, 1.0) - DotProduct(planeq, i, ulc, 1.0);
-                sum += ddelta*ddelta;
-                count++;    // or calculate
+                if (inliers(i, ulc) > 0) {
+                    double ddelta = DotProduct(planep, i, ulc, 1.0) - DotProduct(planeq, i, ulc, 1.0);
+                    sum += ddelta*ddelta;
+                    count++;
+                }
             }
         } else if (sideFlag == BRightFlag) {
             for (int i = ulr; i < (int)lrr; i++) {
-                double ddelta = DotProduct(planep, i, lrc - 1, 1.0) - DotProduct(planeq, i, lrc - 1, 1.0);
-                sum += ddelta*ddelta;
-                count++;    // or calculate
+                if (inliers(i, lrc - 1) > 0) {
+                    double ddelta = DotProduct(planep, i, lrc - 1, 1.0) - DotProduct(planeq, i, lrc - 1, 1.0);
+                    sum += ddelta*ddelta;
+                    count++;
+                }
             }
         } else if (sideFlag == BTopFlag) {
             for (int j = ulc; j < (int)lrc; j++) {
-                double ddelta = DotProduct(planep, ulr, j, 1.0) - DotProduct(planeq, ulr, j, 1.0);
-                sum += ddelta*ddelta;
-                count++;    // or calculate
+                if (inliers(ulr, j) > 0) {
+                    double ddelta = DotProduct(planep, ulr, j, 1.0) - DotProduct(planeq, ulr, j, 1.0);
+                    sum += ddelta*ddelta;
+                    count++;
+                }
             }
         } else if (sideFlag == BTopFlag) {
             for (int j = ulc; j < (int)lrc; j++) {
-                double ddelta = DotProduct(planep, lrr - 1, j, 1.0) - DotProduct(planeq, lrr - 1, j, 1.0);
-                sum += ddelta*ddelta;
-                count++;    // or calculate
+                if (inliers(lrr - 1, j) > 0) {
+                    double ddelta = DotProduct(planep, lrr - 1, j, 1.0) - DotProduct(planeq, lrr - 1, j, 1.0);
+                    sum += ddelta*ddelta;
+                    count++;
+                }
             }
         }
     }
@@ -311,26 +319,6 @@ struct Pixel { // : public custom_alloc {
         } 
         return sum;
     }
-
-    // sideFlag in {BLeft, BRight, BTop, BBottom}, type in {BTHi, BTCo, BTLo, BTRo}
-    //void CalcBorderTypeSum(const Plane_d& planep, const Plane_d& planeq, 
-    //    int sideFlag, int type, double occWeight, double hingeWeight,
-    //    double& sumPrior, double& sumSmo, int& count) const
-    //{
-    //    sumPrior = 0.0;
-    //    sumSmo = 0.0;
-    //    count = 0;
-
-    //    if (type == BTLo || type == BTRo) {
-    //        sumPrior += occWeight;
-    //        sumSmo = 0;
-    //    } else if (type == BTHi) {
-    //        sumPrior += hingeWeight;
-    //        AddToHiSmoothnessSum(sideFlag, planep, planeq, sumSmo, count);
-    //    } else if (type == BTCo) {
-    //        AddToCoSmoothnessSum(sideFlag, planep, planeq, sumSmo, count);
-    //    }
-    //}
 
     void AddDispPixels(const cv::Mat1d& dispImg, vector<cv::Point3d>& pixels)
     {
@@ -357,6 +345,35 @@ struct Pixel { // : public custom_alloc {
         pd.sumDispQ = CalcDispSum(imgDisp, inliers, planeQ, beta);
     }
 
+    //void AddToInlierSums(const cv::Mat1d& dispImg, const cv::Mat1b& inliers,
+    //    int& sumIRow, int& sumIRow2, int& sumICol, int& sumICol2, int& sumIRowCol, double& sumIRowD, double& sumIColD, double& sumID, int& nI)
+    //{
+    //    for (int i = ulr; i < (int)lrr; i++) {
+    //        for (int j = ulc; j < (int)lrc; j++) {
+    //            if (inliers(i, j) > 0) {
+    //                const double& disp = dispImg(i, j);
+    //                sumIRow += i; sumIRow2 += i*i;
+    //                sumICol += j; sumICol2 += j*j;
+    //                sumIRowCol += i*j;
+    //                sumIRowD += i*disp; sumIColD += j*disp;
+    //                sumID += disp;
+    //                nI++;
+    //            }
+    //        }
+    //    }
+    //}
+
+    void UpdatePPImage(Matrix<Pixel*>& ppImg)
+    {
+        for (int i = ulr; i < (int)lrr; i++) {
+            for (int j = ulc; j < (int)lrc; j++) {
+                ppImg(i, j) = this;
+            }
+        }
+    }
+
+
+
     // Border operations
     bool BLeft() const { return (border & BLeftFlag) != 0; }
     void SwapBLeft() { border ^= BLeftFlag; }
@@ -382,8 +399,8 @@ struct Pixel { // : public custom_alloc {
     void SplitColumn(const cv::Mat& img, int row, int col1, int col2, Pixel& p11, Pixel& p12);
     void CopyTo(const cv::Mat& img, int row, int col, Pixel& p11);
     void UpdateInliers(const cv::Mat1d& dispImg, double threshold, cv::Mat1b& inliers) const;
-    void AddToInlierSums(const cv::Mat1d& depthImg, const cv::Mat1b& inliers,
-        int& sumIRow, int& sumIRow2, int& sumICol, int& sumICol2, int& sumIRowCol, double& sumIRowD, double& sumIColD, double& sumID, int& nI); 
+    //void AddToInlierSums(const cv::Mat1d& depthImg, const cv::Mat1b& inliers,
+    //    int& sumIRow, int& sumIRow2, int& sumICol, int& sumICol2, int& sumIRowCol, double& sumIRowD, double& sumIColD, double& sumID, int& nI); 
     string GetPixelsAsString();
 
     //CLASS_ALLOCATION()
@@ -597,8 +614,8 @@ public:
 
     void SetPlane(Plane_d& plane);
     void UpdateDispSum(const cv::Mat1d& depthImg, const cv::Mat1b& inliers, double beta);
-    void UpdateInlierSums(const cv::Mat1d& depthImg, const cv::Mat1b& inliers);
-    void UpdateInliers(const cv::Mat1d& depthImg, double threshold, cv::Mat1b& inliers);
+    //void UpdateInlierSums(const cv::Mat1d& depthImg, const cv::Mat1b& inliers);
+    //void UpdateInliers(const cv::Mat1d& depthImg, double threshold, cv::Mat1b& inliers);
     void CalcPlaneLeastSquares(const cv::Mat1d& depthImg, const cv::Mat1b& inliers);
 
     void ClearPixelSet() { pixels.clear(); }

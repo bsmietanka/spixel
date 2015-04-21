@@ -18,10 +18,12 @@ using namespace std;
 
 void test()
 {
-    Mat img = imread("C:\\Work\\C\\speedup\\ours\\speedup\\x64\\Release\\000002_10L_left_disparity.png", CV_LOAD_IMAGE_ANYDEPTH);
-
-    Mat imgt = AdjustDisparityImage(img);
-    imwrite("c:\\tmp\\intp.png", imgt);
+    //Mat img = imread("C:\\Work\\C\\speedup\\ours\\speedup\\x64\\Release\\000002_10L_left_disparity.png", CV_LOAD_IMAGE_ANYDEPTH);
+    //
+    //Mat imgt = AdjustDisparityImage(img);
+    //imwrite("c:\\tmp\\intp.png", imgt);
+    Timer t;
+    //cout << "test time: " << t.GetTimeInSec() << endl;
 }
 
 void ProcessFiles(const string& paramFile, const string& dirName, const string& pattern,

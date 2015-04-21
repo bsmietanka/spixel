@@ -156,8 +156,16 @@ SPSPair OrderedPair(SuperpixelStereo* sp, SuperpixelStereo* sq)
 void SPSegmentationEngine::InitializeStereo()
 {
     Initialize([]() -> Superpixel* { return new SuperpixelStereo(); });
-
+    InitializePPImage();
     EstimatePlaneParameters();
+}
+
+void SPSegmentationEngine::InitializePPImage()
+{
+    ppImg = Matrix<Pixel*>(img.rows, img.cols);
+    for (Pixel& p : pixelsImg) {
+        p.UpdatePPImage(ppImg);
+    }
 }
 
 void SPSegmentationEngine::Reset()
@@ -234,12 +242,12 @@ int SPSegmentationEngine::PixelSize()
 
 void SPSegmentationEngine::ReEstimatePlaneParameters()
 {
-    #pragma omp parallel for
+    //#pragma omp parallel for
     for (int i = 0; i < superpixels.size(); i++) {
         SuperpixelStereo* sp = (SuperpixelStereo*)superpixels[i];
         sp->CalcPlaneLeastSquares(depthImg, inliers);
-        sp->UpdateInliers(depthImg, params.inlierThreshold, inliers);
     }
+    SPSegmentationEngine::UpdateInliers();
 }
 
 void SPSegmentationEngine::EstimatePlaneParameters()
@@ -254,8 +262,9 @@ void SPSegmentationEngine::EstimatePlaneParameters()
     for (int i = 0; i < superpixels.size(); i++) {
         SuperpixelStereo* sp = (SuperpixelStereo*)superpixels[i];
         UpdateSuperpixelPlaneRANSAC(sp, depthImg, params.dispBeta);
-        sp->UpdateInliers(depthImg, params.inlierThreshold, inliers);
     }
+    SPSegmentationEngine::UpdateInliers();
+    ReEstimatePlaneParameters();
 
     t.Stop();
     performanceInfo.ransac += t.GetTimeInSec();
@@ -280,7 +289,7 @@ void SPSegmentationEngine::EstimatePlaneParameters()
                     double sum;
                     int size;
 
-                    p.CalcHiSmoothnessSum(directions[dir][2], sp->plane, sq->plane, sum, size);
+                    p.CalcHiSmoothnessSum(directions[dir][2], inliers, sp->plane, sq->plane, sum, size);
                     bd.bSize += size;
                     bd.hiSum += sum;
                 }
@@ -378,6 +387,7 @@ void SPSegmentationEngine::SplitPixels()
         for (Pixel& p : pixelsImg) {
             ((SuperpixelStereo*)p.superPixel)->AddToPixelSet(&p);
         }
+        InitializePPImage();
     }
 }
 
@@ -571,12 +581,36 @@ void SPSegmentationEngine::PrintPerformanceInfo()
     cout << endl;
 }
 
-void SPSegmentationEngine::InitializeInliers()
+void SPSegmentationEngine::UpdateInliers()
 {
-    for (const Pixel& p : pixelsImg) {
-        p.UpdateInliers(depthImg, params.inlierThreshold, inliers);
+    for (Superpixel* sp : superpixels) {
+        SuperpixelStereo* sps = (SuperpixelStereo*)sp;
+
+        sps->sumIRow = 0; sps->sumICol = 0;         // Sum of terms computed for inlier points
+        sps->sumIRow2 = 0; sps->sumICol2 = 0;
+        sps->sumIRowCol = 0;
+        sps->sumIRowD = 0.0, sps->sumIColD = 0.0;
+        sps->sumID = 0.0;
+        sps->nI = 0;
+    }
+    for (int i = 0; i < ppImg.rows; i++) {
+        for (int j = 0; j < ppImg.cols; j++) {
+            Pixel* p = ppImg(i, j);
+            const double& disp = depthImg(i, j);
+            const Plane_d& plane = ((SuperpixelStereo*)p->superPixel)->plane;
+            SuperpixelStereo* sps = (SuperpixelStereo*)p->superPixel;
+            
+            sps->sumIRow += i; sps->sumIRow2 += i*i;
+            sps->sumICol += j; sps->sumICol2 += j*j;
+            sps->sumIRowCol += i*j;
+            sps->sumIRowD += i*disp; sps->sumIColD += j*disp;
+            sps->sumID += disp;
+            sps->nI++;
+            inliers(i, j) = fabs(DotProduct(sps->plane, i, j, 1.0) - disp) < params.inlierThreshold;
+        }
     }
 }
+
 
 // Functions
 ///////////////////////////////////////////////////////////////////////////////

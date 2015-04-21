@@ -67,7 +67,7 @@ private:
     Mat origImg;
 
     // Depth image (required for stereo)
-    Mat depthImg;
+    Mat1d depthImg;
     
     // Image to process (in lab color space)
     Mat img;
@@ -75,8 +75,7 @@ private:
     // Support structures
     Matrix<Pixel> pixelsImg;    // pixels matrix, dimension varies, depends on level
     Mat1b inliers;              // boolean matrix of "inliers" (for stereo)
-
-    // Info
+    Matrix<Pixel*> ppImg;       // matrix of dimension of img, pointers to pixelsImg pixels (for stereo)
     vector<Superpixel*> superpixels;
 public:
     SPSegmentationEngine(SPSegmentationParameters params, Mat img, Mat depthImg = Mat());
@@ -94,13 +93,14 @@ public:
 private:
     void Initialize(Superpixel* spGenerator());
     void InitializeStereo();
+    void InitializePPImage();
     void IterateMoves();
     void ReEstimatePlaneParameters();
     void EstimatePlaneParameters();
     void SplitPixels();
     int PixelSize();
     void Reset();
-    void InitializeInliers();
+    void UpdateInliers();
 };
 
 
