@@ -579,6 +579,21 @@ void SPSegmentationEngine::PrintPerformanceInfo()
     for (double& t : performanceInfo.levels)
         cout << t << ' ';
     cout << endl;
+
+    int minBDSize = INT_MAX;
+    int maxBDSize = 0;
+
+    if (params.stereo) {
+        for (Superpixel* sp : superpixels) {
+            SuperpixelStereo* sps = (SuperpixelStereo*)sp;
+            if (minBDSize > sps->boundaryData.size())
+                minBDSize = sps->boundaryData.size();
+            if (maxBDSize < sps->boundaryData.size())
+                maxBDSize = sps->boundaryData.size();
+        }
+        cout << "Max boundary size: " << maxBDSize << endl;
+        cout << "Min boundary size: " << minBDSize << endl;
+    }
 }
 
 void SPSegmentationEngine::UpdateInliers()

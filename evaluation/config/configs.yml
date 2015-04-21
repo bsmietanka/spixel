@@ -20,8 +20,8 @@ sizeWeight: 1.0
 
 dispBeta: 2.0
 dispWeight: 20.0000
-smoWeight: 10.0000
-priorWeight: 10.0000
+smoWeight: 0.0000
+priorWeight: 0.0000
 occPriorWeight: 0.2
 hiPriorWeight: 0.1
 inlierThreshold: 3
