@@ -126,11 +126,11 @@ void SuperpixelStereo::SetPlane(Plane_d& plane_)
     plane = plane_;
 }
 
-void SuperpixelStereo::UpdateDispSum(const cv::Mat1d& depthImg, const cv::Mat1b& inliers, double beta)
+void SuperpixelStereo::UpdateDispSum(const cv::Mat1d& depthImg, const cv::Mat1b& inliers, double noDisp)
 {
     sumDisp = 0;
     for (Pixel* p : pixels) {
-        sumDisp += p->CalcDispSum(depthImg, inliers, plane, beta);
+        sumDisp += p->CalcDispSum(depthImg, inliers, plane, noDisp);
     }
 }
 
@@ -293,5 +293,45 @@ void SuperpixelStereo::GetAddPixelDataStereo(const PixelData& pd,
     }
 }
 
+double SuperpixelStereo::CalcDispEnergy(const cv::Mat1d& dispImg, double inlierThresh, double noDisp)
+{
+    double sum = 0.0;
 
+    for (Pixel* p : pixels) {
+        sum += p->CalcDispSum(dispImg, plane, inlierThresh, noDisp);
+    }
+    return sum;
+}
+
+void SuperpixelStereo::CheckAppEnergy(const cv::Mat& img)
+{
+    double rr = 0, rr2 = 0, gg = 0, gg2 = 0, bb = 0, bb2 = 0;
+
+    for (Pixel* p : pixels) {
+        double r = 0, r2 = 0, g = 0, g2 = 0, b = 0, b2 = 0;
+        p->CalcRGBSum(img, r, r2, g, g2, b, b2);
+        rr += r; rr2 += r2; gg += g; gg2 += g2; bb += b; bb2 += b2;
+    }
+    if (fabs(rr - sumR) > 0.01 || fabs(rr2 - sumR2) > 0.01 || fabs(gg - sumG) > 0.01
+            || fabs(gg2 - sumG2) > 0.01 || fabs(bb - sumB) > 0.01 || fabs(bb2 - sumB2) > 0.01) {
+        cout << "app sum mismatch";
+    }
+}
+
+void SuperpixelStereo::CheckRegEnergy()
+{
+    double rr = 0, rr2 = 0, cc = 0, cc2 = 0;
+
+    for (Pixel* p : pixels) {
+        double r = 0, r2 = 0, c = 0, c2 = 0;
+        p->CalcRowColSum(r, r2, c, c2);
+        rr += r; rr2 += r2; cc += c; cc2 += c2;
+    }
+    if (fabs(rr - sumRow) > 0.01 || fabs(rr2 - sumRow2) > 0.01 || fabs(cc - sumCol) > 0.01 || fabs(cc2 - sumCol2) > 0.01) {
+        cout << "colrow sum mismatch";
+    }
+    if (fabs(eReg - CalcRegEnergy(sumRow, sumCol, sumRow2, sumCol2, size)) > 0.01) {
+        cout << "RE mismatch";
+    }
+}
 

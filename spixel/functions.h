@@ -64,12 +64,6 @@ private:
 
 
 // See definition for description
-// bool TryMovePixel(const cv::Mat_<Pixel*>& pixelsImg, Pixel* p, int qRow, int qCol, PixelMoveData& psd);
-bool TryMovePixel(const cv::Mat& img, const Matrix<Pixel>& pixelsImg, Pixel* p, Pixel* q, PixelMoveData& psd);
-bool TryMovePixelStereo(const cv::Mat& img, const cv::Mat1d& dispImg, const cv::Mat1b& inliers, const Matrix<Pixel>& pixelsImg,
-    Pixel* p, Pixel* q, double beta, PixelMoveData& psd);
-
-// See definition for description
 void MovePixel(Matrix<Pixel>& pixelsImg, PixelMoveData& pmd);
 void MovePixelStereo(Matrix<Pixel>& pixelsImg, PixelMoveData& pmd);
 
@@ -82,6 +76,10 @@ bool IsSuperpixelRegionConnectedOptimized(const Matrix<Pixel>& pixelsImg, Pixel*
 // For debug purposes; inefficient!
 int CalcSuperpixelBoundaryLength(const Matrix<Pixel>& pixelsImg, Superpixel* sp);
 
+// Length of superpixel boundary
+void CalcSuperpixelBoundaryLength(const Matrix<Pixel>& pixelsImg, Pixel* p, Superpixel* sp, Superpixel* sq,
+    int& spbl, int& sqbl, int& sobl);
+
 bool IsPatch3x3Connected(int bits);
 
 // Plane through 3 points, returns false if p1, p2, p3 are approximately coplanar (eps normal size)
@@ -90,13 +88,13 @@ bool Plane3P(const cv::Point3d& p1, const cv::Point3d& p2, const cv::Point3d& p3
 // Returns false if pixels.size() < 3 or no 3 points were found to 
 // form a plane
 bool RANSACPlane(const vector<cv::Point3d>& pixels, Plane_d& plane);
-bool UpdateSuperpixelPlaneRANSAC(SuperpixelStereo* sp, const cv::Mat1d& depthImg, double beta);
+bool UpdateSuperpixelPlaneRANSAC(SuperpixelStereo* sp, const cv::Mat1d& depthImg);
 
 void LeastSquaresPlane(int sumIRow, int sumIRow2, int sumICol, int sumICol2, int sumIRowCol, double sumIRowD, double sumIColD,
     double sumID, int nI, Plane_d& plane);
 
 // Equation (8) for superpixel sp
-void CalcDispEnergy(SuperpixelStereo* sp, const cv::Mat1d& dispImg, double beta);
+void CalcDispEnergy(SuperpixelStereo* sp, const cv::Mat1d& dispImg, double noDisp);
 
 double CalcCoSmoothnessSum(const cv::Mat1b& inliers, SuperpixelStereo* sp, SuperpixelStereo* sq);
 

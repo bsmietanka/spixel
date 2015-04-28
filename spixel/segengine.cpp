@@ -10,7 +10,7 @@
 double TotalEnergyDelta(const SPSegmentationParameters& params, PixelMoveData* pmd) 
 { 
     double eSum = 0.0;
-    int initPSizeHalf = pmd->p->superPixel->GetInitialSize()/2;
+    int initPSizeQuarter = pmd->p->superPixel->GetInitialSize()/4;
     
     eSum += params.regWeight * pmd->eRegDelta;
     eSum += params.appWeight * pmd->eAppDelta;
@@ -21,8 +21,8 @@ double TotalEnergyDelta(const SPSegmentationParameters& params, PixelMoveData* p
         eSum += params.smoWeight * pmd->eSmoDelta;
     }
 
-    if (pmd->pSize < initPSizeHalf)  
-        eSum -= params.sizeWeight * (initPSizeHalf - pmd->pSize);
+    if (pmd->pSize < initPSizeQuarter)
+        eSum -= params.sizeWeight * (initPSizeQuarter - pmd->pSize);
     return eSum;
 }
 
@@ -63,6 +63,21 @@ static void read(const FileNode& node, SPSegmentationParameters& x, const SPSegm
 
 // SPSegmentationEngine
 ///////////////////////////////////////////////////////////////////////////////
+
+void UpdateFromNode(double& val, const FileNode& node)
+{
+    if (!node.empty()) val = (double)node;
+}
+
+void UpdateFromNode(int& val, const FileNode& node)
+{
+    if (!node.empty()) val = (int)node;
+}
+
+void UpdateFromNode(bool& val, const FileNode& node)
+{
+    if (!node.empty()) val = (int)node != 0;
+}
 
 SPSegmentationEngine::SPSegmentationEngine(SPSegmentationParameters params, Mat im, Mat depthIm) :
     params(params), origImg(im)
@@ -158,6 +173,7 @@ void SPSegmentationEngine::InitializeStereo()
     Initialize([]() -> Superpixel* { return new SuperpixelStereo(); });
     InitializePPImage();
     EstimatePlaneParameters();
+    InitializeStereoEnergies();
 }
 
 void SPSegmentationEngine::InitializePPImage()
@@ -247,27 +263,35 @@ void SPSegmentationEngine::ReEstimatePlaneParameters()
         SuperpixelStereo* sp = (SuperpixelStereo*)superpixels[i];
         sp->CalcPlaneLeastSquares(depthImg, inliers);
     }
-    SPSegmentationEngine::UpdateInliers();
+    UpdateInliers();
+    InitializeStereoEnergies();
 }
 
 void SPSegmentationEngine::EstimatePlaneParameters()
 {
-    const int directions[2][3] = { { 0, -1, BLeftFlag }, { -1, 0, BTopFlag } };
-
-    vector<cv::Point3d> pixels3d;
-
     Timer t;
 
     #pragma omp parallel for
     for (int i = 0; i < superpixels.size(); i++) {
         SuperpixelStereo* sp = (SuperpixelStereo*)superpixels[i];
-        UpdateSuperpixelPlaneRANSAC(sp, depthImg, params.dispBeta);
+        UpdateSuperpixelPlaneRANSAC(sp, depthImg);
     }
-    SPSegmentationEngine::UpdateInliers();
+    UpdateInliers();
     ReEstimatePlaneParameters();
 
     t.Stop();
     performanceInfo.ransac += t.GetTimeInSec();
+}
+
+void SPSegmentationEngine::InitializeStereoEnergies()
+{
+    const int directions[2][3] = { { 0, -1, BLeftFlag }, { -1, 0, BTopFlag } };
+
+    // Update disparity sums
+    for (Superpixel* sp : superpixels) {
+        SuperpixelStereo* sps = (SuperpixelStereo*)sp;
+        sps->UpdateDispSum(depthImg, inliers, params.noDisp);
+    }
 
     // Update boundary data
     map<SPSPair, BoundaryData> boundaryMap;
@@ -275,8 +299,8 @@ void SPSegmentationEngine::EstimatePlaneParameters()
     // update map
     for (Pixel& p : pixelsImg) {
         SuperpixelStereo* sp = (SuperpixelStereo*)p.superPixel;
-        Pixel* q;
         SuperpixelStereo* sq;
+        Pixel* q;
 
         for (int dir = 0; dir < 2; dir++) {
             q = PixelAt(pixelsImg, p.row + directions[dir][0], p.col + directions[dir][1]);
@@ -439,8 +463,8 @@ void SPSegmentationEngine::IterateMoves()
                 }
                 if (!newNeighbor) tryMoveData[m].allowed = false;
                 else {
-                    if (params.stereo) TryMovePixelStereo(img, depthImg, inliers, pixelsImg, p, q, params.dispBeta, tryMoveData[m]); 
-                    else TryMovePixel(img, pixelsImg, p, q, tryMoveData[m]);
+                    if (params.stereo) TryMovePixelStereo(p, q, tryMoveData[m]); 
+                    else TryMovePixel(p, q, tryMoveData[m]);
                     nbsp[nbspSize++] = q->superPixel;
                 }
             }
@@ -449,8 +473,18 @@ void SPSegmentationEngine::IterateMoves()
         PixelMoveData* bestMoveData = FindBestMoveData(params, tryMoveData);
 
         if (bestMoveData != nullptr) {
-            if (params.stereo) MovePixelStereo(pixelsImg, *bestMoveData);
-            else MovePixel(pixelsImg, *bestMoveData);
+            if (params.stereo) {
+                MovePixelStereo(pixelsImg, *bestMoveData);
+                //SuperpixelStereo* sps = (SuperpixelStereo*)(bestMoveData->p->superPixel);
+                //double calc = sps->CalcDispEnergy(depthImg, params.inlierThreshold, params.noDisp);
+                //if (fabs(calc - sps->GetDispSum()) > 0.01) {
+                //    cout << "Disp sum mismatch";
+                //}
+                //sps->CheckRegEnergy();
+                //sps->CheckAppEnergy(img);
+            } else {
+                MovePixel(pixelsImg, *bestMoveData);
+            }
 
             list.PushBack(p);
             for (int m = 0; m < 5; m++) {
@@ -558,10 +592,47 @@ string SPSegmentationEngine::GetSegmentedImageInfo()
 
 void SPSegmentationEngine::PrintDebugInfo()
 {
+    double appESum = 0.0;
+    double regESum = 0.0;
+    double dispESum = 0.0;
+
     for (Superpixel* sp : superpixels) {
-        cout << "Border length: " << sp->GetBorderLength() << "/";
-        cout << CalcSuperpixelBoundaryLength(pixelsImg, sp) << endl;
+        appESum += sp->GetAppEnergy();
+        regESum += sp->GetRegEnergy();
     }
+    cout << "Reg energy mean: " << regESum / superpixels.size() << endl;
+    cout << "Disp energy mean: " << dispESum / superpixels.size() << endl;
+}
+
+
+void SPSegmentationEngine::PrintDebugInfoStereo()
+{
+    StatData stat;
+
+    MeanAndVariance(superpixels.begin(), superpixels.end(),
+        [](Superpixel* sp) { return ((SuperpixelStereo*)sp)->GetAppEnergy(); },
+        stat);
+    cout << "App energy mean: " << stat.mean << ", variance: " << stat.var << ", min: " << stat.min << ", max: " << stat.max << endl;
+
+    MeanAndVariance(superpixels.begin(), superpixels.end(),
+        [](Superpixel* sp) { return ((SuperpixelStereo*)sp)->GetRegEnergy(); },
+        stat);
+    cout << "Reg energy mean: " << stat.mean << ", variance: " << stat.var << ", min: " << stat.min << ", max: " << stat.max << endl;
+
+    MeanAndVariance(superpixels.begin(), superpixels.end(),
+        [](Superpixel* sp) { return ((SuperpixelStereo*)sp)->GetBorderLength(); },
+        stat);
+    cout << "Border length mean: " << stat.mean << ", variance: " << stat.var << ", min: " << stat.min << ", max: " << stat.max << endl;
+
+    MeanAndVariance(superpixels.begin(), superpixels.end(),
+        [](Superpixel* sp) { return ((SuperpixelStereo*)sp)->GetDispSum(); },
+        stat);
+    cout << "Disp energy mean: " << stat.mean << ", variance: " << stat.var << ", min: " << stat.min << ", max: " << stat.max << endl;
+
+    MeanAndVariance(superpixels.begin(), superpixels.end(),
+        [](Superpixel* sp) { return ((SuperpixelStereo*)sp)->GetSmoEnergy(); },
+        stat);
+    cout << "Smo energy mean: " << stat.mean << ", variance: " << stat.var << ", min: " << stat.min << ", max: " << stat.max << endl;
 }
 
 int SPSegmentationEngine::GetNoOfSuperpixels() const
@@ -611,9 +682,8 @@ void SPSegmentationEngine::UpdateInliers()
     for (int i = 0; i < ppImg.rows; i++) {
         for (int j = 0; j < ppImg.cols; j++) {
             Pixel* p = ppImg(i, j);
-            const double& disp = depthImg(i, j);
-            const Plane_d& plane = ((SuperpixelStereo*)p->superPixel)->plane;
             SuperpixelStereo* sps = (SuperpixelStereo*)p->superPixel;
+            const double& disp = depthImg(i, j);
             
             sps->sumIRow += i; sps->sumIRow2 += i*i;
             sps->sumICol += j; sps->sumICol2 += j*j;
@@ -625,6 +695,92 @@ void SPSegmentationEngine::UpdateInliers()
         }
     }
 }
+
+// Try to move Pixel p to Superpixel containing Pixel q with coordinates (qRow, qCol)
+// Note: pixel q is must be neighbor of p and p->superPixel != q->superPixel
+// Fills psd, returns psd.allowed
+// Note: energy deltas in psd are "energy_before - energy_after"
+bool SPSegmentationEngine::TryMovePixel(Pixel* p, Pixel* q, PixelMoveData& psd)
+{
+    Superpixel* sp = p->superPixel;
+    Superpixel* sq = q->superPixel;
+
+    if (sp == sq || !IsSuperpixelRegionConnectedOptimized(pixelsImg, p, p->row - 1, p->col - 1, p->row + 2, p->col + 2)) {
+        psd.allowed = false;
+        return false;
+    }
+
+    int spSize = sp->GetSize(), sqSize = sq->GetSize();
+    double spEApp = sp->GetAppEnergy(), sqEApp = sq->GetAppEnergy();
+    double spEReg = sp->GetRegEnergy(), sqEReg = sq->GetRegEnergy();
+
+    PixelChangeData pcd;
+    PixelChangeData qcd;
+    PixelData pd;
+    int spbl, sqbl, sobl;
+
+    p->CalcPixelData(img, pd);
+    sp->GetRemovePixelData(pd, pcd);
+    sq->GetAddPixelData(pd, qcd);
+    CalcSuperpixelBoundaryLength(pixelsImg, p, sp, sq, spbl, sqbl, sobl);
+
+    psd.p = p;
+    psd.q = q;
+    psd.pSize = pcd.newSize;
+    psd.qSize = qcd.newSize;
+    psd.eAppDelta = spEApp + sqEApp - pcd.newEApp - qcd.newEApp;
+    psd.eRegDelta = spEReg + sqEReg - pcd.newEReg - qcd.newEReg;
+    psd.bLenDelta = sqbl - spbl;
+    psd.allowed = true;
+    psd.pixelData = pd;
+    return true;
+}
+
+bool SPSegmentationEngine::TryMovePixelStereo(Pixel* p, Pixel* q, PixelMoveData& psd)
+{
+    SuperpixelStereo* sp = (SuperpixelStereo*)p->superPixel;
+    SuperpixelStereo* sq = (SuperpixelStereo*)q->superPixel;
+
+    if (sp == sq || !IsSuperpixelRegionConnectedOptimized(pixelsImg, p, p->row - 1, p->col - 1, p->row + 2, p->col + 2)) {
+        psd.allowed = false;
+        return false;
+    }
+
+    double pSize = p->GetSize(), qSize = q->GetSize();
+    int spSize = sp->GetSize(), sqSize = sq->GetSize();
+    double spEApp = sp->GetAppEnergy(), sqEApp = sq->GetAppEnergy();
+    double spEReg = sp->GetRegEnergy(), sqEReg = sq->GetRegEnergy();
+    double spEDisp = sp->GetDispSum(), sqEDisp = sq->GetDispSum();
+    double spESmo = sp->GetSmoEnergy(), sqESmo = sq->GetSmoEnergy();
+    double spEPrior = sp->GetPriorEnergy(), sqEPrior = sq->GetPriorEnergy();
+
+    PixelChangeDataStereo pcd;
+    PixelChangeDataStereo qcd;
+    PixelData pd;
+    int spbl, sqbl, sobl;
+
+    p->CalcPixelDataStereo(img, depthImg, sp->plane, sq->plane, params.inlierThreshold, params.noDisp, pd);
+    sp->GetRemovePixelDataStereo(pd, pixelsImg, depthImg, inliers, p, q, pcd);
+    sq->GetAddPixelDataStereo(pd, pixelsImg, depthImg, inliers, p, q, qcd);
+    CalcSuperpixelBoundaryLength(pixelsImg, p, sp, sq, spbl, sqbl, sobl);
+
+    psd.p = p;
+    psd.q = q;
+    psd.pSize = pcd.newSize;
+    psd.qSize = qcd.newSize;
+    psd.eAppDelta = spEApp + sqEApp - pcd.newEApp - qcd.newEApp;
+    psd.eRegDelta = spEReg + sqEReg - pcd.newEReg - qcd.newEReg;
+    psd.bLenDelta = sqbl - spbl;
+    psd.eDispDelta = spEDisp + sqEDisp - pcd.newEDisp - qcd.newEDisp;
+    psd.ePriorDelta = 0;
+    psd.eSmoDelta = spESmo + sqESmo - GetSmoEnergy(pcd.newBoundaryData) - GetSmoEnergy(qcd.newBoundaryData);
+    psd.allowed = true;
+    psd.pixelData = pd;
+    psd.bDataP = std::move(pcd.newBoundaryData);
+    psd.bDataQ = std::move(qcd.newBoundaryData);
+    return true;
+}
+
 
 
 // Functions

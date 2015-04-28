@@ -5,6 +5,11 @@
 
 using namespace cv;
 
+
+void UpdateFromNode(double& val, const FileNode& node);
+void UpdateFromNode(int& val, const FileNode& node);
+void UpdateFromNode(bool& val, const FileNode& node);
+
 struct SPSegmentationParameters {
     int pixelSize = 16;      // Pixel (block) size -- initial size
     int sPixelSize = 5;      // initial size of superpixels in Pixels (blocks)
@@ -12,36 +17,36 @@ struct SPSegmentationParameters {
     double appWeight = 1.0;
     double regWeight = 1.0;
     double lenWeight = 1.0;
-    double sizeWeight = 1.0;
-    double dispWeight = 1.0;
-    double smoWeight = 1.0;
-    double priorWeight = 1.0;
-    double occPriorWeight = 1.0;
-    double hiPriorWeight = 1.0;
-    double dispBeta = 1.0;
+    double sizeWeight = 1.0;        
+    double dispWeight = 2000.0;     // \lambda_{disp}
+    double smoWeight = 0.2;         // \lambda_{smo}
+    double priorWeight = 0.2;       // \lambda_{prior}
+    double occPriorWeight = 15.0;   // \lambda_{occ}
+    double hiPriorWeight = 5.0;     // \lambda_{hinge}
+    double noDisp = 9.0;            // \lambda_{d}
     double inlierThreshold = 3.0;
 
     int iterations = 1;
 
     bool stereo = false;
 
-    void read(const FileNode& node) // Read OpenCV serialization for this class
+    void read(const FileNode& node)
     {
-        pixelSize = (int)node["pixelSize"];
-        sPixelSize = (int)node["sPixelSize"];
-        appWeight = (double)node["appWeight"];
-        regWeight = (double)node["regWeight"];
-        lenWeight = (double)node["lenWeight"];
-        sizeWeight = (double)node["sizeWeight"];
-        dispWeight = (double)node["dispWeight"];
-        smoWeight = (double)node["smoWeight"];
-        priorWeight = (double)node["priorWeight"];
-        occPriorWeight = (double)node["occPriorWeight"];
-        hiPriorWeight = (double)node["hiPriorWeight"];
-        dispBeta = (double)node["dispBeta"];
-        stereo = (int)node["stereo"] != 0;
-        iterations = (int)node["iterations"];
-        inlierThreshold = (int)node["inlierThreshold"];
+        UpdateFromNode(pixelSize, node["pixelSize"]);
+        UpdateFromNode(sPixelSize, node["sPixelSize"]);
+        UpdateFromNode(appWeight, node["appWeight"]);
+        UpdateFromNode(regWeight, node["regWeight"]);
+        UpdateFromNode(lenWeight, node["lenWeight"]);
+        UpdateFromNode(sizeWeight, node["sizeWeight"]);
+        UpdateFromNode(dispWeight, node["dispWeight"]);
+        UpdateFromNode(smoWeight, node["smoWeight"]);
+        UpdateFromNode(priorWeight, node["priorWeight"]);
+        UpdateFromNode(occPriorWeight, node["occPriorWeight"]);
+        UpdateFromNode(hiPriorWeight, node["hiPriorWeight"]);
+        UpdateFromNode(noDisp, node["noDisp"]);
+        UpdateFromNode(stereo, node["stereo"]);
+        UpdateFromNode(iterations, node["iterations"]);
+        UpdateFromNode(inlierThreshold, node["inlierThreshold"]);
     }
 };
 
@@ -87,12 +92,14 @@ public:
     Mat GetSegmentation() const;
     string GetSegmentedImageInfo();
     void PrintDebugInfo();
+    void PrintDebugInfoStereo();
     void PrintPerformanceInfo();
     int GetNoOfSuperpixels() const;
     double ProcessingTime() { return performanceInfo.total; }
 private:
     void Initialize(Superpixel* spGenerator());
     void InitializeStereo();
+    void InitializeStereoEnergies();
     void InitializePPImage();
     void IterateMoves();
     void ReEstimatePlaneParameters();
@@ -101,6 +108,9 @@ private:
     int PixelSize();
     void Reset();
     void UpdateInliers();
+
+    bool TryMovePixel(Pixel* p, Pixel* q, PixelMoveData& psd);
+    bool TryMovePixelStereo(Pixel* p, Pixel* q, PixelMoveData& psd);
 };
 
 

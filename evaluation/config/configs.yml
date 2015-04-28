@@ -11,19 +11,25 @@ stereo: 1
 iterations: 1
 
 # energy weights
-appWeight: 10.0
-regWeight: 2.0
-lenWeight: 1.0
-sizeWeight: 1.0
+appWeight: 500.0
+regWeight: 500.0
+lenWeight: 1000.0
+sizeWeight: 100.0
 
 # stereo weights
+# default values:
+#   dispWeight: 2000.0
+#   smoWeight: 0.2
+#   priorWeight: 0.2
+#   occPriorWeight: 15.0
+#   hiPriorWeight: 5.0
+#   inlierThreshold: 3
 
-dispBeta: 2.0
-dispWeight: 20.0000
-smoWeight: 0.0000
-priorWeight: 0.0000
-occPriorWeight: 0.2
-hiPriorWeight: 0.1
+dispWeight: 2000.0
+smoWeight: 0.2
+priorWeight: 0.2
+occPriorWeight: 15.0
+hiPriorWeight: 5.0
 inlierThreshold: 3
 
 

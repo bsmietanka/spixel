@@ -201,91 +201,6 @@ void CalcSuperpixelBoundaryLength(const Matrix<Pixel>& pixelsImg, Pixel* p, Supe
 //}
     
 
-// Try to move Pixel p to Superpixel containing Pixel q with coordinates (qRow, qCol)
-// Note: pixel q is must be neighbor of p and p->superPixel != q->superPixel
-// Fills psd, returns psd.allowed
-// Note: energy deltas in psd are "energy_before - energy_after"
-bool TryMovePixel(const cv::Mat& img, const Matrix<Pixel>& pixelsImg, Pixel* p, Pixel* q, PixelMoveData& psd)
-{
-    Superpixel* sp = p->superPixel;
-    Superpixel* sq = q->superPixel;
-
-    if (sp == sq || !IsSuperpixelRegionConnectedOptimized(pixelsImg, p, p->row - 1, p->col - 1, p->row + 2, p->col + 2)) {
-        psd.allowed = false;
-        return false;
-    }
-
-    int spSize = sp->GetSize(), sqSize = sq->GetSize();
-    double spEApp = sp->GetAppEnergy(), sqEApp = sq->GetAppEnergy();
-    double spEReg = sp->GetRegEnergy(), sqEReg = sq->GetRegEnergy();
-
-    PixelChangeData pcd;
-    PixelChangeData qcd;
-    PixelData pd;
-    int spbl, sqbl, sobl;
-
-    p->CalcPixelData(img, pd);
-    sp->GetRemovePixelData(pd, pcd);
-    sq->GetAddPixelData(pd, qcd);
-    CalcSuperpixelBoundaryLength(pixelsImg, p, sp, sq, spbl, sqbl, sobl);
-
-    psd.p = p;
-    psd.q = q;
-    psd.pSize = pcd.newSize;
-    psd.qSize = qcd.newSize;
-    psd.eAppDelta = spEApp + sqEApp - pcd.newEApp - qcd.newEApp;
-    psd.eRegDelta = spEReg + sqEReg - pcd.newEReg - qcd.newEReg;
-    psd.bLenDelta = sqbl - spbl;
-    psd.allowed = true;
-    psd.pixelData = pd;
-    return true;
-}
-
-bool TryMovePixelStereo(const cv::Mat& img, const cv::Mat1d& dispImg, const cv::Mat1b& inliers, const Matrix<Pixel>& pixelsImg, 
-    Pixel* p, Pixel* q, double beta, PixelMoveData& psd)
-{
-    SuperpixelStereo* sp = (SuperpixelStereo*)p->superPixel;
-    SuperpixelStereo* sq = (SuperpixelStereo*)q->superPixel;
-
-    if (sp == sq || !IsSuperpixelRegionConnectedOptimized(pixelsImg, p, p->row - 1, p->col - 1, p->row + 2, p->col + 2)) {
-        psd.allowed = false;
-        return false;
-    }
-
-    int spSize = sp->GetSize(), sqSize = sq->GetSize();
-    double spEApp = sp->GetAppEnergy(), sqEApp = sq->GetAppEnergy();
-    double spEReg = sp->GetRegEnergy(), sqEReg = sq->GetRegEnergy();
-    double spEDisp = sp->GetDispEnergy(), sqEDisp = sq->GetDispEnergy();
-    double spESmo = sp->GetSmoEnergy(), sqESmo = sq->GetSmoEnergy();
-    double spEPrior = sp->GetPriorEnergy(), sqEPrior = sq->GetPriorEnergy();
-    
-    PixelChangeDataStereo pcd;
-    PixelChangeDataStereo qcd;
-    PixelData pd;
-    int spbl, sqbl, sobl;
-
-    p->CalcPixelDataStereo(img, dispImg, inliers, sp->plane, sq->plane, beta, pd);
-    sp->GetRemovePixelDataStereo(pd, pixelsImg, dispImg, inliers, p, q, pcd);
-    sq->GetAddPixelDataStereo(pd, pixelsImg, dispImg, inliers, p, q, qcd);
-    CalcSuperpixelBoundaryLength(pixelsImg, p, sp, sq, spbl, sqbl, sobl);
-
-    psd.p = p;
-    psd.q = q;
-    psd.pSize = pcd.newSize;
-    psd.qSize = qcd.newSize;
-    psd.eAppDelta = spEApp + sqEApp - pcd.newEApp - qcd.newEApp;
-    psd.eRegDelta = spEReg + sqEReg - pcd.newEReg - qcd.newEReg;
-    psd.bLenDelta = sqbl - spbl;
-    psd.eDispDelta = spEDisp + sqEDisp - pcd.newEDisp - qcd.newEDisp;
-    psd.ePriorDelta = 0;
-    psd.eSmoDelta = spESmo + sqESmo - GetSmoEnergy(pcd.newBoundaryData) - GetSmoEnergy(qcd.newBoundaryData);
-    psd.allowed = true;
-    psd.pixelData = pd;
-    psd.bDataP = std::move(pcd.newBoundaryData);
-    psd.bDataQ = std::move(qcd.newBoundaryData);
-    return true;
-}
-
 // Move Pixel p from superpixel of p to superpixel of q
 void MovePixel(Matrix<Pixel>& pixelsImg, PixelMoveData& pmd)
 {
@@ -459,7 +374,7 @@ bool RANSACPlane(const vector<cv::Point3d>& pixels, Plane_d& plane)
 }
 
 // Should be thread-safe!
-bool UpdateSuperpixelPlaneRANSAC(SuperpixelStereo* sp, const cv::Mat1d& depthImg, double beta)
+bool UpdateSuperpixelPlaneRANSAC(SuperpixelStereo* sp, const cv::Mat1d& depthImg)
 {
     vector<cv::Point3d> pixels;
     Plane_d plane;
@@ -471,21 +386,6 @@ bool UpdateSuperpixelPlaneRANSAC(SuperpixelStereo* sp, const cv::Mat1d& depthImg
     }
     if (!RANSACPlane(pixels, plane)) return false;
     return true;
-}
-
-double CalcDispEnergy(SuperpixelStereo* sp, cv::Mat1d& dispImg, double beta)
-{
-    double result = 0.0;
-
-    for (Pixel* p : sp->pixels) {
-        const double& disp = dispImg(p->row, p->col);
-
-        if (disp == 0) continue;
-        double delta = (DotProduct(sp->plane, p->row, p->col, 1.0) - disp);
-        delta *= delta;
-        result += max(beta, delta);
-    }
-    return result;
 }
 
 void CalcOccSmoothnessEnergy(SuperpixelStereo* sp, SuperpixelStereo* sq, double occWeight, double hingeWeight,

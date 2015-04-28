@@ -23,7 +23,7 @@ const double eps = 1.0E-6;
 // Functions
 //////////////
 
-inline double CalcRegEnergy(int sumRow, int sumCol, int sumRow2, int sumCol2, int size)
+inline double CalcRegEnergy(double sumRow, double sumCol, double sumRow2, double sumCol2, double size)
 {
     double meanRow = (double)sumRow / size;
     double meanCol = (double)sumCol / size;
@@ -138,8 +138,8 @@ typedef unordered_map<Superpixel*, BInfo> BInfoMapType;
 
 struct PixelData {
     Pixel* p;
-    int sumRow, sumCol;
-    int sumRow2, sumCol2;
+    double sumRow, sumCol;
+    double sumRow2, sumCol2;
     double sumR, sumG, sumB;
     double sumR2, sumG2, sumB2;
     double sumDispP, sumDispQ;
@@ -156,7 +156,7 @@ struct PixelMoveData {
     double eDispDelta;  // Deltas of energy terms in Eq. (7)
     double eSmoDelta;
     double ePriorDelta;
-    int bLenDelta;      // boundary length delta
+    double bLenDelta;   // boundary length delta
     int pSize;          // superpixel of p size
     int qSize;          // superpixel of q size
     PixelData pixelData;
@@ -210,14 +210,17 @@ struct Pixel { // : public custom_alloc {
         superPixel = nullptr;
     }
 
-    void CalcRowColSum(int& sumRow, int& sumRow2, int& sumCol, int& sumCol2) const
+    void CalcRowColSum(double& sumRow, double& sumRow2, double& sumCol, double& sumCol2) const
     {
-        sumRow = 0; sumRow2 = 0;
-        sumCol = 0; sumCol2 = 0;
+        sumRow = 0.0; sumRow2 = 0.0;
+        sumCol = 0.0; sumCol2 = 0.0;
         for (int i = ulr; i < (int)lrr; i++) {
             for (int j = ulc; j < (int)lrc; j++) {
                 sumRow += i; sumCol += j;
                 sumRow2 += i*i; sumCol2 += j*j;
+                if (sumCol2 < 0) {
+                    exit(0);
+                }
             }
         }
     }
@@ -246,7 +249,7 @@ struct Pixel { // : public custom_alloc {
         */
     }
 
-    double CalcDispSum(const cv::Mat1d& dispImg, const cv::Mat1b& inliers, const Plane_d& plane, double beta) const
+    double CalcDispSum(const cv::Mat1d& dispImg, const cv::Mat1b& inliers, const Plane_d& plane, double noDisp) const
     {
         double sumDisp = 0.0;
 
@@ -255,9 +258,27 @@ struct Pixel { // : public custom_alloc {
                 if (inliers(i, j) > 0) {
                     const double& disp = dispImg(i, j);
                     double delta = DotProduct(plane, i, j, 1.0) - disp;
+                    sumDisp += delta*delta;
+                } else {
+                    sumDisp += noDisp;
+                }
+            }
+        }
+        return sumDisp;
+    }
 
-                    delta *= delta;
-                    sumDisp += beta > delta ? beta : delta;
+    double CalcDispSum(const cv::Mat1d& dispImg, const Plane_d& plane, double inlierThresh, double noDisp) const
+    {
+        double sumDisp = 0.0;
+
+        for (int i = ulr; i < (int)lrr; i++) {
+            for (int j = ulc; j < (int)lrc; j++) {
+                const double& disp = dispImg(i, j);
+                double delta = DotProduct(plane, i, j, 1.0) - disp;
+                if (fabs(delta) < inlierThresh) {
+                    sumDisp += delta*delta;
+                } else {
+                    sumDisp += noDisp;
                 }
             }
         }
@@ -337,12 +358,12 @@ struct Pixel { // : public custom_alloc {
         pd.size = GetSize();
     }
 
-    inline void CalcPixelDataStereo(const cv::Mat& img, const cv::Mat1d& imgDisp, const cv::Mat1b& inliers,
-        Plane_d& planeP, Plane_d& planeQ, double beta, PixelData& pd)
+    inline void CalcPixelDataStereo(const cv::Mat& img, const cv::Mat1d& imgDisp,
+        Plane_d& planeP, Plane_d& planeQ, double inlierThresh, double noDisp, PixelData& pd)
     {
         CalcPixelData(img, pd);
-        pd.sumDispP = CalcDispSum(imgDisp, inliers, planeP, beta);
-        pd.sumDispQ = CalcDispSum(imgDisp, inliers, planeQ, beta);
+        pd.sumDispP = CalcDispSum(imgDisp, planeP, inlierThresh, noDisp);
+        pd.sumDispQ = CalcDispSum(imgDisp, planeQ, inlierThresh, noDisp);
     }
 
     //void AddToInlierSums(const cv::Mat1d& dispImg, const cv::Mat1b& inliers,
@@ -409,8 +430,8 @@ struct Pixel { // : public custom_alloc {
 class Superpixel {
 protected:
     int borderLength = 0;                   // length of border (in img pixels)
-    int sumRow = 0, sumCol = 0;             // sum of row, column indices
-    int sumRow2 = 0, sumCol2 = 0;           // sum or row, column squares of indices
+    double sumRow = 0, sumCol = 0;          // sum of row, column indices
+    double sumRow2 = 0, sumCol2 = 0;        // sum or row, column squares of indices
     double sumR = 0, sumG = 0, sumB = 0;    // sum of colors
     double sumR2 = 0, sumG2 = 0, sumB2 = 0; // sum of squares of colors
     double eApp = 0.0;
@@ -576,6 +597,7 @@ public:
     void AddPixel(PixelData& pd) override
     {
         Superpixel::AddPixel(pd);
+        pixels.insert(pd.p);
         sumDisp += pd.sumDispQ;
     }
 
@@ -586,7 +608,7 @@ public:
         sumDisp -= pd.sumDispP;
     }
 
-    double GetDispEnergy()
+    double GetDispSum()
     {
         return sumDisp;
     }
@@ -613,7 +635,7 @@ public:
     }
 
     void SetPlane(Plane_d& plane);
-    void UpdateDispSum(const cv::Mat1d& depthImg, const cv::Mat1b& inliers, double beta);
+    void UpdateDispSum(const cv::Mat1d& depthImg, const cv::Mat1b& inliers, double noDisp);
     //void UpdateInlierSums(const cv::Mat1d& depthImg, const cv::Mat1b& inliers);
     //void UpdateInliers(const cv::Mat1d& depthImg, double threshold, cv::Mat1b& inliers);
     void CalcPlaneLeastSquares(const cv::Mat1d& depthImg, const cv::Mat1b& inliers);
@@ -636,6 +658,10 @@ public:
         Pixel* p, Pixel* q,
         PixelChangeDataStereo& pcd) const;
 
+    // For debug purposes!
+    double CalcDispEnergy(const cv::Mat1d& dispImg, double inlierThresh, double noDisp);
+    void CheckAppEnergy(const cv::Mat& img);
+    void CheckRegEnergy();
 };
 
 // CircList 

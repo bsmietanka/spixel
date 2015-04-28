@@ -204,6 +204,7 @@ void ProcessFiles(const string& paramFile, const string& dirName, const string& 
         SPSegmentationEngine engine(params, image, dispImage);
         if (params.stereo) {
             engine.ProcessImageStereo();
+            engine.PrintDebugInfoStereo();
         } else {
             engine.ProcessImage();
         }
