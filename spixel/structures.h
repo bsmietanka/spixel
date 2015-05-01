@@ -441,6 +441,7 @@ protected:
 
 public:
     Superpixel() { }
+    virtual ~Superpixel() { }
 
     // Same as AddPixel below, but energy is not caclulated and must be initialized separately.
     // Should only be used in initialization process.
@@ -587,6 +588,7 @@ public:
     Plane_d plane;
 
     SuperpixelStereo() : Superpixel() { }
+    virtual ~SuperpixelStereo() { }
 
     void AddPixelInit(PixelData& pd) override
     {

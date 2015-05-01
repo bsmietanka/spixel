@@ -90,6 +90,7 @@ public:
     void ProcessImageStereo();
     Mat GetSegmentedImage();
     Mat GetSegmentation() const;
+    Mat GetDisparity() const;
     string GetSegmentedImageInfo();
     void PrintDebugInfo();
     void PrintDebugInfoStereo();
@@ -101,6 +102,7 @@ private:
     void InitializeStereo();
     void InitializeStereoEnergies();
     void InitializePPImage();
+    void UpdatePPImage();
     void IterateMoves();
     void ReEstimatePlaneParameters();
     void EstimatePlaneParameters();

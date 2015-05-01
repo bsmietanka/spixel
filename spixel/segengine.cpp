@@ -179,10 +179,16 @@ void SPSegmentationEngine::InitializeStereo()
 void SPSegmentationEngine::InitializePPImage()
 {
     ppImg = Matrix<Pixel*>(img.rows, img.cols);
+    UpdatePPImage();
+}
+
+void SPSegmentationEngine::UpdatePPImage()
+{
     for (Pixel& p : pixelsImg) {
         p.UpdatePPImage(ppImg);
     }
 }
+
 
 void SPSegmentationEngine::Reset()
 {
@@ -415,17 +421,10 @@ void SPSegmentationEngine::SplitPixels()
     pixelsImg = newPixelsImg;
 
     if (params.stereo) {
-        for (int i = 0; i < pixelsImg.rows; i++) {
-            for (int j = 0; j < pixelsImg.cols; j++) {
-                Pixel& p = pixelsImg(i, j);
-                ((SuperpixelStereo*)p.superPixel)->AddToPixelSet(&p);
-            }
+        for (Pixel& p : pixelsImg) {
+            ((SuperpixelStereo*)p.superPixel)->AddToPixelSet(&p);
         }
-
-        //for (Pixel& p : pixelsImg) {
-        //    ((SuperpixelStereo*)p.superPixel)->AddToPixelSet(&p);
-        //}
-        InitializePPImage();
+        UpdatePPImage();
     }
 }
 
@@ -543,6 +542,21 @@ Mat SPSegmentationEngine::GetSegmentedImage()
     }
     return result;
 }
+
+Mat SPSegmentationEngine::GetDisparity() const
+{
+    Mat_<unsigned short> result = Mat_<unsigned short>(ppImg.rows, ppImg.cols);
+
+    for (int i = 0; i < ppImg.rows; i++) {
+        for (int j = 0; j < ppImg.cols; j++) {
+            SuperpixelStereo* sps = (SuperpixelStereo*)ppImg(i, j)->superPixel;
+            double val = DotProduct(sps->plane, i, j, 1.0);
+            result(i, j) = val < 256.0 ? val * 256.0 : 65535;
+        }
+    }
+    return result;
+}
+
 
 Mat SPSegmentationEngine::GetSegmentation() const
 {

@@ -216,6 +216,12 @@ void ProcessFiles(const string& paramFile, const string& dirName, const string& 
 
         imwrite(outImage, engine.GetSegmentedImage());
         imwrite(outImageSeg, engine.GetSegmentation());
+
+        if (params.stereo) {
+            string outImageDisp = ChangeExtension(fileDir + "disp/" + f, ".png");
+            imwrite(outImageDisp, engine.GetDisparity());
+        }
+
         cout << "  no of superpixels: " << engine.GetNoOfSuperpixels() << endl;
         nProcessed++;
     }
@@ -230,6 +236,7 @@ void ProcessFiles(const string& paramFile, const string& dirName, const string& 
 int _tmain(int argc, char* argv[])
 {
     // test();
+    _CrtSetBreakAlloc(298);
     if (argc == 4) {
         ProcessFiles(argv[1], argv[2], argv[3], "");
     } else if (argc == 5) {
@@ -238,6 +245,7 @@ int _tmain(int argc, char* argv[])
         cout << "Usage: spixel config_file.yml file_dir file_pattern" << endl;
         cout << "   or: spixel config_file.yml file_dir file_pattern disparity_extension" << endl;
     }
+    _CrtDumpMemoryLeaks();
     return 0;
 }
 
