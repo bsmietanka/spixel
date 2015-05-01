@@ -362,11 +362,11 @@ void SPSegmentationEngine::SplitPixels()
 
     if (currentPixelSize <= 1) return;
 
-    int imgPixelsRows = pixelsImg.rows * 2;
-    int imgPixelsCols = pixelsImg.cols * 2;
+    int imgPixelsRows = 0;
+    int imgPixelsCols = 0;
 
-    if (pixelsImg(0, pixelsImg.cols - 1).GetCSize() == 1) imgPixelsCols--;
-    if (pixelsImg(pixelsImg.rows - 1, 0).GetRSize() == 1) imgPixelsRows--;
+    for (int i = 0; i < pixelsImg.rows; i++) imgPixelsRows += (pixelsImg(i, 0).GetRSize() == 1) ? 1 : 2;
+    for (int j = 0; j < pixelsImg.cols; j++) imgPixelsCols += (pixelsImg(0, j).GetCSize() == 1) ? 1 : 2;
 
     Matrix<Pixel> newPixelsImg(imgPixelsRows, imgPixelsCols);
 
@@ -376,41 +376,55 @@ void SPSegmentationEngine::SplitPixels()
         }
     }
 
-    for (Pixel& p : pixelsImg) {
-        int pRowSize = p.GetRSize();
-        int pColSize = p.GetCSize();
-        int newRow = 2 * p.row;
-        int newCol = 2 * p.col;
+    int newRow = 0;
 
-        if (pRowSize == 1 && pColSize == 1) {
-            Pixel& p11 = newPixelsImg(newRow, newCol);
+    for (int i = 0; i < pixelsImg.rows; i++) {
+        int newCol = 0;
+        int pRowSize = pixelsImg(i, 0).GetRSize();
 
-            p.CopyTo(img, newRow, newCol, p11);
-        } else if (pColSize == 1) { // split only row
-            Pixel& p11 = newPixelsImg(newRow, newCol);
-            Pixel& p21 = newPixelsImg(newRow + 1, newCol);
+        for (int j = 0; j < pixelsImg.cols; j++) {
+            Pixel& p = pixelsImg(i, j);
+            int pColSize = p.GetCSize();
 
-            p.SplitRow(img, newRow, newRow + 1, newCol, p11, p21);
-        } else if (pRowSize == 1) { // split only column
-            Pixel& p11 = newPixelsImg(newRow, newCol);
-            Pixel& p12 = newPixelsImg(newRow, newCol + 1);
+            if (pRowSize == 1 && pColSize == 1) {
+                Pixel& p11 = newPixelsImg(newRow, newCol);
 
-            p.SplitColumn(img, newRow, newCol, newCol + 1, p11, p12);
-        } else { // split row and column
-            Pixel& p11 = newPixelsImg(newRow, newCol);
-            Pixel& p12 = newPixelsImg(newRow, newCol + 1);
-            Pixel& p21 = newPixelsImg(newRow + 1, newCol);
-            Pixel& p22 = newPixelsImg(newRow + 1, newCol + 1);
+                p.CopyTo(img, newRow, newCol, p11);
+            } else if (pColSize == 1) { // split only row
+                Pixel& p11 = newPixelsImg(newRow, newCol);
+                Pixel& p21 = newPixelsImg(newRow + 1, newCol);
 
-            p.Split(img, newRow, newRow + 1, newCol, newCol + 1, p11, p12, p21, p22);
+                p.SplitRow(img, newRow, newRow + 1, newCol, p11, p21);
+            } else if (pRowSize == 1) { // split only column
+                Pixel& p11 = newPixelsImg(newRow, newCol);
+                Pixel& p12 = newPixelsImg(newRow, newCol + 1);
+
+                p.SplitColumn(img, newRow, newCol, newCol + 1, p11, p12);
+            } else { // split row and column
+                Pixel& p11 = newPixelsImg(newRow, newCol);
+                Pixel& p12 = newPixelsImg(newRow, newCol + 1);
+                Pixel& p21 = newPixelsImg(newRow + 1, newCol);
+                Pixel& p22 = newPixelsImg(newRow + 1, newCol + 1);
+
+                p.Split(img, newRow, newRow + 1, newCol, newCol + 1, p11, p12, p21, p22);
+            }
+            newCol += (pColSize > 1) ? 2 : 1;
         }
+        newRow += (pRowSize > 1) ? 2 : 1;
     }
     pixelsImg = newPixelsImg;
 
     if (params.stereo) {
-        for (Pixel& p : pixelsImg) {
-            ((SuperpixelStereo*)p.superPixel)->AddToPixelSet(&p);
+        for (int i = 0; i < pixelsImg.rows; i++) {
+            for (int j = 0; j < pixelsImg.cols; j++) {
+                Pixel& p = pixelsImg(i, j);
+                ((SuperpixelStereo*)p.superPixel)->AddToPixelSet(&p);
+            }
         }
+
+        //for (Pixel& p : pixelsImg) {
+        //    ((SuperpixelStereo*)p.superPixel)->AddToPixelSet(&p);
+        //}
         InitializePPImage();
     }
 }

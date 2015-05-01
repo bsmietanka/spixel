@@ -24,9 +24,9 @@ string Pixel::GetPixelsAsString()
 void Pixel::Split(const cv::Mat& img, int row1, int row2, int col1, int col2, Pixel& p11, Pixel& p12, Pixel& p21, Pixel& p22)
 {
     int cols = GetCSize();
-    int cols1 = cols / 2;
+    int cols1 = cols - cols / 2;
     int rows = GetRSize();
-    int rows1 = rows / 2;
+    int rows1 = rows - rows / 2;
     
     p11.Initialize(row1, col1, ulr, ulc, ulr + rows1, ulc + cols1);
     p12.Initialize(row1, col2, ulr, ulc + cols1, ulr + rows1, ulc + cols);
@@ -46,7 +46,7 @@ void Pixel::SplitRow(const cv::Mat& img, int row1, int row2, int col, Pixel& p11
 {
     int cols = GetCSize();
     int rows = GetRSize();
-    int rows1 = rows / 2;
+    int rows1 = rows - rows / 2;
 
     p11.Initialize(row1, col, ulr, ulc, ulr + rows1, ulc + cols);
     p21.Initialize(row2, col, ulr + rows1, ulc, ulr + rows, ulc + cols);
@@ -69,7 +69,7 @@ void Pixel::CopyTo(const cv::Mat& img, int row, int col, Pixel& p11)
 void Pixel::SplitColumn(const cv::Mat& img, int row, int col1, int col2, Pixel& p11, Pixel& p12)
 {
     int cols = GetCSize();
-    int cols1 = cols / 2;
+    int cols1 = cols - cols / 2;
     int rows = GetRSize();
 
     p11.Initialize(row, col1, ulr, ulc, ulr + rows, ulc + cols1);
