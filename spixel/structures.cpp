@@ -52,8 +52,8 @@ void Pixel::SplitRow(const cv::Mat& img, int row1, int row2, int col, Pixel& p11
     p21.Initialize(row2, col, ulr + rows1, ulc, ulr + rows, ulc + cols);
     p11.superPixel = superPixel;
     p21.superPixel = superPixel;
-    p11.border = border & (BTopFlag | BLeftFlag);
-    p21.border = border & (BLeftFlag | BBottomFlag);
+    p11.border = border & (BTopFlag | BLeftFlag | BRightFlag);
+    p21.border = border & (BLeftFlag | BBottomFlag | BRightFlag);
 }
 
 void Pixel::CopyTo(const cv::Mat& img, int row, int col, Pixel& p11)
@@ -63,7 +63,7 @@ void Pixel::CopyTo(const cv::Mat& img, int row, int col, Pixel& p11)
 
     p11.Initialize(row, col, ulr, ulc, ulr + rows, ulc + cols);
     p11.superPixel = superPixel;
-    p11.border = border & (BTopFlag | BLeftFlag);
+    p11.border = border;
 }
 
 void Pixel::SplitColumn(const cv::Mat& img, int row, int col1, int col2, Pixel& p11, Pixel& p12)
@@ -76,8 +76,8 @@ void Pixel::SplitColumn(const cv::Mat& img, int row, int col1, int col2, Pixel& 
     p12.Initialize(row, col2, ulr, ulc + cols1, ulr + rows, ulc + cols);
     p11.superPixel = superPixel;
     p12.superPixel = superPixel;
-    p11.border = border & (BTopFlag | BLeftFlag);
-    p12.border = border & (BTopFlag | BRightFlag);
+    p11.border = border & (BTopFlag | BLeftFlag | BBottomFlag);
+    p12.border = border & (BTopFlag | BRightFlag | BBottomFlag);
 }
 
 void Pixel::UpdateInliers(const cv::Mat1d& dispImg, double threshold, cv::Mat1b& inliers) const
@@ -148,10 +148,20 @@ void SuperpixelStereo::UpdateDispSum(const cv::Mat1d& depthImg, const cv::Mat1b&
 //    }
 //}
 
-void SuperpixelStereo::CalcPlaneLeastSquares(const cv::Mat1d& depthImg, const cv::Mat1b& inliers)
+void SuperpixelStereo::CalcPlaneLeastSquares(const cv::Mat1d& depthImg)
 {
     LeastSquaresPlane(sumIRow, sumIRow2, sumICol, sumICol2, sumIRowCol, sumIRowD, sumIColD, sumID, nI, plane);
 }
+
+void SuperpixelStereo::CalcPlaneLeastSquares(SuperpixelStereo* sq, const cv::Mat1d& depthImg)
+{
+    LeastSquaresPlane(sumIRow + sq->sumIRow, sumIRow2 + sq->sumIRow2, 
+        sumICol + sq->sumICol, sumICol2 + sq->sumICol2, sumIRowCol + sq->sumIRowCol, 
+        sumIRowD + sq->sumIRowD, sumIColD + sq->sumIColD, sumID + sq->sumID, 
+        nI + sq->nI, plane);
+    sq->plane = plane;
+}
+
 
 void SuperpixelStereo::GetRemovePixelDataStereo(const PixelData& pd, 
     const Matrix<Pixel>& pixelsImg,

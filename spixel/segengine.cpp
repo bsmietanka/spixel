@@ -209,16 +209,21 @@ void SPSegmentationEngine::ProcessImage()
     t0.Resume();
 
     Timer t1;
+    bool splitted;
 
     do {
         Timer t2;
+
+        performanceInfo.levelIterations.push_back(0);
         for (int iteration = 0; iteration < params.iterations; iteration++) {
-            IterateMoves();
+            int iters = IterateMoves();
+            if (iters > performanceInfo.levelIterations.back())
+                performanceInfo.levelIterations.back() = iters;
         }
-        SplitPixels();
+        splitted = SplitPixels();
         t2.Stop();
-        performanceInfo.levels.push_back(t2.GetTimeInSec());
-    } while (PixelSize() > 1);
+        performanceInfo.levelTimes.push_back(t2.GetTimeInSec());
+    } while (splitted);
 
     t0.Stop();
     t1.Stop();
@@ -237,17 +242,21 @@ void SPSegmentationEngine::ProcessImageStereo()
     t0.Resume();
 
     Timer t1;
+    bool splitted;
 
     do {
         Timer t2;
+        performanceInfo.levelIterations.push_back(0);
         for (int iteration = 0; iteration < params.iterations; iteration++) {
-            IterateMoves();
+            int iters = IterateMoves();
+            if (iters > performanceInfo.levelIterations.back())
+                performanceInfo.levelIterations.back() = iters;
             ReEstimatePlaneParameters();
         }
-        SplitPixels();
+        splitted = SplitPixels();
         t2.Stop();
-        performanceInfo.levels.push_back(t2.GetTimeInSec());
-    } while (PixelSize() > 1);
+        performanceInfo.levelTimes.push_back(t2.GetTimeInSec());
+    } while (splitted);
 
     t0.Stop();
     t1.Stop();
@@ -255,23 +264,35 @@ void SPSegmentationEngine::ProcessImageStereo()
     performanceInfo.imgproc = t1.GetTimeInSec();
 }
 
-
-// Get size of the first pixel (this one has probably standard dimension)
-int SPSegmentationEngine::PixelSize()
-{
-    return pixelsImg(0).GetCSize();
-}
-
 void SPSegmentationEngine::ReEstimatePlaneParameters()
 {
-    //#pragma omp parallel for
+    for (int s = 0; s < params.reSteps; s++) {
+        UpdateBoundaryData();
+        UpdatePlaneParameters();
+    }
+    UpdateDisparitySums();
+}
+
+void SPSegmentationEngine::UpdatePlaneParameters()
+{
     for (int i = 0; i < superpixels.size(); i++) {
         SuperpixelStereo* sp = (SuperpixelStereo*)superpixels[i];
-        sp->CalcPlaneLeastSquares(depthImg, inliers);
+        bool updated = false;
+
+        for (auto& bd : sp->boundaryData) {
+            SuperpixelStereo* sq = (SuperpixelStereo*)bd.first;
+            if (bd.second.type == BTCo && sp < bd.first) {
+                sp->CalcPlaneLeastSquares(sq, depthImg);
+                updated = true;
+            }
+        }
+        if (!updated) {
+            sp->CalcPlaneLeastSquares(depthImg);
+        }
     }
     UpdateInliers();
-    InitializeStereoEnergies();
 }
+
 
 void SPSegmentationEngine::EstimatePlaneParameters()
 {
@@ -282,24 +303,36 @@ void SPSegmentationEngine::EstimatePlaneParameters()
         SuperpixelStereo* sp = (SuperpixelStereo*)superpixels[i];
         UpdateSuperpixelPlaneRANSAC(sp, depthImg);
     }
-    UpdateInliers();
-    ReEstimatePlaneParameters();
-
     t.Stop();
     performanceInfo.ransac += t.GetTimeInSec();
+
+    // Re-estimate
+    UpdateInliers();
+    for (int i = 0; i < superpixels.size(); i++) {
+        SuperpixelStereo* sp = (SuperpixelStereo*)superpixels[i];
+        sp->CalcPlaneLeastSquares(depthImg);
+    }
 }
 
 void SPSegmentationEngine::InitializeStereoEnergies()
 {
-    const int directions[2][3] = { { 0, -1, BLeftFlag }, { -1, 0, BTopFlag } };
-
-    // Update disparity sums
+    UpdateInliers();
+    UpdateDisparitySums();
+    UpdateBoundaryData();
+}
+ 
+void SPSegmentationEngine::UpdateDisparitySums()
+{
     for (Superpixel* sp : superpixels) {
         SuperpixelStereo* sps = (SuperpixelStereo*)sp;
         sps->UpdateDispSum(depthImg, inliers, params.noDisp);
     }
+}
 
-    // Update boundary data
+void SPSegmentationEngine::UpdateBoundaryData()
+{
+    const int directions[2][3] = { { 0, -1, BLeftFlag }, { -1, 0, BTopFlag } };
+
     map<SPSPair, BoundaryData> boundaryMap;
 
     // update map
@@ -335,9 +368,12 @@ void SPSegmentationEngine::InitializeStereoEnergies()
         double eSmoHiSum = item.second.hiSum;
         double eSmoOcc = 1; // Phi!?
 
-        double eHi = params.smoWeight*eSmoHiSum / item.second.bSize + params.priorWeight*params.hiPriorWeight;
-        double eCo = params.smoWeight*eSmoCoSum / (sp->GetSize() + sq->GetSize());
-        double eOcc = params.smoWeight*eSmoOcc + params.priorWeight*params.occPriorWeight;
+        //double eHi = params.smoWeight*eSmoHiSum / item.second.bSize + params.priorWeight*params.hiPriorWeight;
+        //double eCo = params.smoWeight*eSmoCoSum / (sp->GetSize() + sq->GetSize());
+        //double eOcc = params.smoWeight*eSmoOcc + params.priorWeight*params.occPriorWeight;
+        double eHi = eSmoHiSum / item.second.bSize + params.hiPriorWeight;
+        double eCo = eSmoCoSum / (sp->GetSize() + sq->GetSize());
+        double eOcc = params.occPriorWeight;
 
         auto& bd = sp->boundaryData[sq];
 
@@ -362,17 +398,28 @@ void SPSegmentationEngine::InitializeStereoEnergies()
 
 }
 
-void SPSegmentationEngine::SplitPixels()
+// Return true if pixels were actually split.
+bool SPSegmentationEngine::SplitPixels()
 {
-    int currentPixelSize = PixelSize();
-
-    if (currentPixelSize <= 1) return;
-
     int imgPixelsRows = 0;
     int imgPixelsCols = 0;
+    int maxPixelSize = 1;
 
-    for (int i = 0; i < pixelsImg.rows; i++) imgPixelsRows += (pixelsImg(i, 0).GetRSize() == 1) ? 1 : 2;
-    for (int j = 0; j < pixelsImg.cols; j++) imgPixelsCols += (pixelsImg(0, j).GetCSize() == 1) ? 1 : 2;
+    for (int i = 0; i < pixelsImg.rows; i++) {
+        int rSize = pixelsImg(i, 0).GetRSize();
+     
+        imgPixelsRows += (rSize == 1) ? 1 : 2;
+        if (rSize > maxPixelSize) maxPixelSize = rSize;
+    }
+    for (int j = 0; j < pixelsImg.cols; j++) {
+        int cSize = pixelsImg(0, j).GetCSize();
+
+        imgPixelsCols += (cSize == 1) ? 1 : 2;
+        if (cSize > maxPixelSize) maxPixelSize = cSize;
+    }
+
+    if (maxPixelSize == 1) 
+        return false;
 
     Matrix<Pixel> newPixelsImg(imgPixelsRows, imgPixelsCols);
 
@@ -426,9 +473,11 @@ void SPSegmentationEngine::SplitPixels()
         }
         UpdatePPImage();
     }
+    return true;
 }
 
-void SPSegmentationEngine::IterateMoves()
+// Returns number of iterations
+int SPSegmentationEngine::IterateMoves()
 {
     // tuple: (p, q), p, q are neighboring Pixels
     // We move pixel p to superpixel q->superPixel
@@ -456,7 +505,7 @@ void SPSegmentationEngine::IterateMoves()
     Superpixel* nbsp[5];
     int nbspSize;
 
-    while (!list.Empty()) {
+    while (!list.Empty() && count < params.maxUpdates) {
         Pixel*& p = list.Front();
 
         nbsp[0] = p->superPixel;
@@ -510,10 +559,16 @@ void SPSegmentationEngine::IterateMoves()
         list.PopFront();
         count++;
     }
-
+    return count;
 }
 
 Mat SPSegmentationEngine::GetSegmentedImage()
+{
+    if (params.stereo) return GetSegmentedImageStereo();
+    else return GetSegmentedImagePlain();
+}
+
+Mat SPSegmentationEngine::GetSegmentedImagePlain()
 {
     Mat result = origImg.clone();
     Vec3b blackPixel(0, 0, 0);
@@ -543,6 +598,69 @@ Mat SPSegmentationEngine::GetSegmentedImage()
     return result;
 }
 
+const Vec3b& BoundaryColor(Pixel* p, Pixel* q)
+{
+    static const Vec3b pixelColors[] = { Vec3b(0, 0, 0), Vec3b(0, 255, 0), Vec3b(255, 0, 0), Vec3b(0, 0, 196), Vec3b(0, 0, 196) };
+
+    if (p == nullptr || q == nullptr) return pixelColors[0];
+
+    SuperpixelStereo* sp = (SuperpixelStereo*)p->superPixel;
+    SuperpixelStereo* sq = (SuperpixelStereo*)q->superPixel;
+
+    if (sp == nullptr || sq == nullptr) return pixelColors[0];
+
+    auto bd = sp->boundaryData.find(sq);
+    if (bd == sp->boundaryData.end()) return pixelColors[0];
+    else {
+        if (bd->second.type > 0 || bd->second.type < 5) return pixelColors[bd->second.type];
+        else return pixelColors[0];
+    }
+}
+
+Mat SPSegmentationEngine::GetSegmentedImageStereo()
+{ 
+    if (!params.stereo) return GetSegmentedImagePlain();
+
+    Mat result = origImg.clone();
+
+    for (Pixel& p : pixelsImg) {
+        if (p.BLeft()) {
+            Pixel* q = PixelAt(pixelsImg, p.row, p.col - 1);
+            const Vec3b& color = BoundaryColor(&p, q);
+
+            for (int r = p.ulr; r < p.lrr; r++) {
+                result.at<Vec3b>(r, p.ulc) = color;
+            }
+        }
+        if (p.BRight()) {
+            Pixel* q = PixelAt(pixelsImg, p.row, p.col + 1);
+            const Vec3b& color = BoundaryColor(&p, q);
+
+            for (int r = p.ulr; r < p.lrr; r++) {
+                result.at<Vec3b>(r, p.lrc - 1) = color;
+            }
+        }
+        if (p.BTop()) {
+            Pixel* q = PixelAt(pixelsImg, p.row - 1, p.col);
+
+            const Vec3b& color = BoundaryColor(&p, q);
+            for (int c = p.ulc; c < p.lrc; c++) {
+                result.at<Vec3b>(p.ulr, c) = color;
+            }
+        }
+        if (p.BBottom()) {
+            Pixel* q = PixelAt(pixelsImg, p.row + 1, p.col);
+            const Vec3b& color = BoundaryColor(&p, q);
+
+            for (int c = p.ulc; c < p.lrc; c++) {
+                result.at<Vec3b>(p.lrr - 1, c) = color;
+            }
+        }
+    }
+    return result;
+
+}
+
 Mat SPSegmentationEngine::GetDisparity() const
 {
     Mat_<unsigned short> result = Mat_<unsigned short>(ppImg.rows, ppImg.cols);
@@ -551,7 +669,7 @@ Mat SPSegmentationEngine::GetDisparity() const
         for (int j = 0; j < ppImg.cols; j++) {
             SuperpixelStereo* sps = (SuperpixelStereo*)ppImg(i, j)->superPixel;
             double val = DotProduct(sps->plane, i, j, 1.0);
-            result(i, j) = val < 256.0 ? val * 256.0 : 65535;
+            result(i, j) = val < 256.0 ? (val < 0 ? 0 : val * 256.0) : 65535;
         }
     }
     return result;
@@ -675,8 +793,11 @@ void SPSegmentationEngine::PrintPerformanceInfo()
     cout << "Time of image processing: " << performanceInfo.imgproc << " sec." << endl;
     cout << "Total time: " << performanceInfo.total << " sec." << endl;
     cout << "Times for each level (in sec.): ";
-    for (double& t : performanceInfo.levels)
+    for (double& t : performanceInfo.levelTimes)
         cout << t << ' ';
+    cout << endl;
+    for (int& c : performanceInfo.levelIterations)
+        cout << c << ' ';
     cout << endl;
 
     int minBDSize = INT_MAX;
@@ -712,14 +833,17 @@ void SPSegmentationEngine::UpdateInliers()
             Pixel* p = ppImg(i, j);
             SuperpixelStereo* sps = (SuperpixelStereo*)p->superPixel;
             const double& disp = depthImg(i, j);
-            
-            sps->sumIRow += i; sps->sumIRow2 += i*i;
-            sps->sumICol += j; sps->sumICol2 += j*j;
-            sps->sumIRowCol += i*j;
-            sps->sumIRowD += i*disp; sps->sumIColD += j*disp;
-            sps->sumID += disp;
-            sps->nI++;
-            inliers(i, j) = fabs(DotProduct(sps->plane, i, j, 1.0) - disp) < params.inlierThreshold;
+            bool inlier = fabs(DotProduct(sps->plane, i, j, 1.0) - disp) < params.inlierThreshold;
+
+            inliers(i, j) = inlier;
+            if (inlier) {
+                sps->sumIRow += i; sps->sumIRow2 += i*i;
+                sps->sumICol += j; sps->sumICol2 += j*j;
+                sps->sumIRowCol += i*j;
+                sps->sumIRowD += i*disp; sps->sumIColD += j*disp;
+                sps->sumID += disp;
+                sps->nI++;
+            }
         }
     }
 }

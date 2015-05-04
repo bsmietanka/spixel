@@ -377,14 +377,13 @@ bool RANSACPlane(const vector<cv::Point3d>& pixels, Plane_d& plane)
 bool UpdateSuperpixelPlaneRANSAC(SuperpixelStereo* sp, const cv::Mat1d& depthImg)
 {
     vector<cv::Point3d> pixels;
-    Plane_d plane;
 
     pixels.reserve(sp->GetSize());
     for (Pixel* p : sp->pixels) {
         p->AddDispPixels(depthImg, pixels);
 
     }
-    if (!RANSACPlane(pixels, plane)) return false;
+    if (!RANSACPlane(pixels, sp->plane)) return false;
     return true;
 }
 

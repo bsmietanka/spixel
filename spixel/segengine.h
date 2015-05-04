@@ -27,6 +27,9 @@ struct SPSegmentationParameters {
     double inlierThreshold = 3.0;
 
     int iterations = 1;
+    int maxUpdates = 400000;
+    int reSteps = 5;
+
 
     bool stereo = false;
 
@@ -46,7 +49,9 @@ struct SPSegmentationParameters {
         UpdateFromNode(noDisp, node["noDisp"]);
         UpdateFromNode(stereo, node["stereo"]);
         UpdateFromNode(iterations, node["iterations"]);
+        UpdateFromNode(reSteps, node["reSteps"]);
         UpdateFromNode(inlierThreshold, node["inlierThreshold"]);
+        UpdateFromNode(maxUpdates, node["maxUpdates"]);
     }
 };
 
@@ -59,7 +64,8 @@ private:
         double init = 0.0;
         double imgproc = 0.0;
         double ransac = 0.0;
-        vector<double> levels;
+        vector<double> levelTimes;
+        vector<int> levelIterations;
         double total = 0.0;
     };
 
@@ -89,6 +95,8 @@ public:
     void ProcessImage();
     void ProcessImageStereo();
     Mat GetSegmentedImage();
+    Mat GetSegmentedImagePlain();
+    Mat GetSegmentedImageStereo();
     Mat GetSegmentation() const;
     Mat GetDisparity() const;
     string GetSegmentedImageInfo();
@@ -103,13 +111,15 @@ private:
     void InitializeStereoEnergies();
     void InitializePPImage();
     void UpdatePPImage();
-    void IterateMoves();
+    int IterateMoves();
     void ReEstimatePlaneParameters();
     void EstimatePlaneParameters();
-    void SplitPixels();
-    int PixelSize();
+    bool SplitPixels();
     void Reset();
     void UpdateInliers();
+    void UpdateBoundaryData();
+    void UpdatePlaneParameters();
+    void UpdateDisparitySums();
 
     bool TryMovePixel(Pixel* p, Pixel* q, PixelMoveData& psd);
     bool TryMovePixelStereo(Pixel* p, Pixel* q, PixelMoveData& psd);

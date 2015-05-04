@@ -640,7 +640,8 @@ public:
     void UpdateDispSum(const cv::Mat1d& depthImg, const cv::Mat1b& inliers, double noDisp);
     //void UpdateInlierSums(const cv::Mat1d& depthImg, const cv::Mat1b& inliers);
     //void UpdateInliers(const cv::Mat1d& depthImg, double threshold, cv::Mat1b& inliers);
-    void CalcPlaneLeastSquares(const cv::Mat1d& depthImg, const cv::Mat1b& inliers);
+    void CalcPlaneLeastSquares(const cv::Mat1d& depthImg);
+    void CalcPlaneLeastSquares(SuperpixelStereo* sq, const cv::Mat1d& depthImg);
 
     void ClearPixelSet() { pixels.clear(); }
     void AddToPixelSet(Pixel* p1) { pixels.insert(p1); }
