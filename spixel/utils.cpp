@@ -222,6 +222,6 @@ cv::Mat AdjustDisparityImage(const cv::Mat& img)
     cv::Mat imgConv;
 
     img.convertTo(imgConv, CV_64FC1, 1 / 256.);
-    return FillGapsInDisparityImage(imgConv);
+    return imgConv;
 }
 

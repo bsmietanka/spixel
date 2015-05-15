@@ -131,7 +131,7 @@
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>c:\Programs\opencv\build\include\;C:\Work\C\tinydir</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Work\C\cppinclude;c:\Programs\opencv\build\include\;C:\Work\C\tinydir</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <OpenMPSupport>false</OpenMPSupport>
@@ -184,7 +184,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>c:\Programs\opencv\build\include\;C:\Work\C\tinydir</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Work\C\cppinclude;c:\Programs\opencv\build\include\;C:\Work\C\tinydir</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <OpenMPSupport>true</OpenMPSupport>
@@ -207,7 +207,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>false</IntrinsicFunctions>
       <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>c:\Programs\opencv\build\include\;C:\Work\C\tinydir</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Work\C\cppinclude;c:\Programs\opencv\build\include\;C:\Work\C\tinydir</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <OpenMPSupport>false</OpenMPSupport>
@@ -227,7 +227,6 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="functions.h" />
-    <ClInclude Include="sallocator.h" />
     <ClInclude Include="segengine.h" />
     <ClInclude Include="stdafx.h" />
     <ClInclude Include="structures.h" />
@@ -236,7 +235,6 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="functions.cpp" />
-    <ClCompile Include="sallocator.cpp" />
     <ClCompile Include="segengine.cpp" />
     <ClCompile Include="structures.cpp" />
     <ClCompile Include="spixel.cpp" />

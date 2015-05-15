@@ -20,6 +20,7 @@ cv::Mat ConvertRGBToLab(const cv::Mat& img);
 // Input is divided by 256.0 and gaps (regions with value 0) are "filled", 
 cv::Mat AdjustDisparityImage(const cv::Mat& img);
 
+cv::Mat FillGapsInDisparityImage(const cv::Mat& img);
 
 struct StatData {
     double mean, var, min, max;

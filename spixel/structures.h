@@ -4,8 +4,8 @@
 #include <vector>
 #include <memory>
 #include <cstdint>
-#include <unordered_set>
-#include <unordered_map>
+#include <set>
+#include <map>
 #include "sallocator.h"
 
 using namespace std;
@@ -23,18 +23,18 @@ const double eps = 1.0E-6;
 // Functions
 //////////////
 
-inline double CalcRegEnergy(double sumRow, double sumCol, double sumRow2, double sumCol2, double size)
+inline double CalcRegEnergy(double sumRow, double sumCol, double sumRow2, double sumCol2, double size, int numP)
 {
     double meanRow = (double)sumRow / size;
     double meanCol = (double)sumCol / size;
     double difSqRow = sumRow2 - 2 * meanRow * sumRow + size * meanRow * meanRow;
     double difSqCol = sumCol2 - 2 * meanCol * sumCol + size * meanCol * meanCol;
 
-    return difSqCol + difSqRow;
+    return (difSqCol + difSqRow) / (size / numP);
 }
 
 inline double CalcAppEnergy(double sumR, double sumG, double sumB,
-    double sumR2, double sumG2, double sumB2, int size)
+    double sumR2, double sumG2, double sumB2, int size, int numP)
 {
     double meanR = sumR / size;
     double meanG = sumG / size;
@@ -43,7 +43,7 @@ inline double CalcAppEnergy(double sumR, double sumG, double sumB,
     double difSqG = sumG2 - 2 * meanG * sumG + size * meanG * meanG;
     double difSqB = sumB2 - 2 * meanB * sumB + size * meanB * meanB;
 
-    return difSqR + difSqG + difSqB;
+    return (difSqR + difSqG + difSqB) / (size / numP);
 }
 
 inline double DotProduct(const Plane_d& p, double x, double y, double z)
@@ -134,7 +134,7 @@ struct BInfo {
     double smo = 0.0;
 };
 
-typedef unordered_map<Superpixel*, BInfo> BInfoMapType;
+typedef map<Superpixel*, BInfo> BInfoMapType;
 
 struct PixelData {
     Pixel* p;
@@ -345,7 +345,9 @@ struct Pixel { // : public custom_alloc {
     {
         for (int i = ulr; i < (int)lrr; i++) {
             for (int j = ulc; j < (int)lrc; j++) {
-                pixels.push_back(cv::Point3d(i, j, dispImg(i, j)));
+                const double& disp = dispImg(i, j);
+                if (disp > 0.0)
+                    pixels.push_back(cv::Point3d(i, j, disp));
             }
         }
     }
@@ -428,7 +430,7 @@ struct Pixel { // : public custom_alloc {
 };
 
 class Superpixel {
-protected:
+public:
     int borderLength = 0;                   // length of border (in img pixels)
     double sumRow = 0, sumCol = 0;          // sum of row, column indices
     double sumRow2 = 0, sumCol2 = 0;        // sum or row, column squares of indices
@@ -438,6 +440,7 @@ protected:
     double eReg = 0.0;
     int size = 0;                           // number of (image) pixels
     int initialSize = 0;
+    int numP = 0;
 
 public:
     Superpixel() { }
@@ -458,6 +461,7 @@ public:
         sumG2 += pd.sumG2;
         sumB2 += pd.sumB2;
         size += pd.size;
+        numP++;
         pd.p->superPixel = this;
     }
 
@@ -467,8 +471,8 @@ public:
     virtual void AddPixel(PixelData& pd)
     {
         AddPixelInit(pd);
-        eApp = CalcAppEnergy(sumR, sumG, sumB, sumR2, sumG2, sumB2, size);
-        eReg = CalcRegEnergy(sumRow, sumCol, sumRow2, sumCol2, size);
+        eApp = CalcAppEnergy(sumR, sumG, sumB, sumR2, sumG2, sumB2, size, numP);
+        eReg = CalcRegEnergy(sumRow, sumCol, sumRow2, sumCol2, size, numP);
         //double eReg2 = regEnergyDebug();
         //double dif = eReg - eReg2;
     }
@@ -521,15 +525,21 @@ public:
         sumG2 -= pd.sumG2;
         sumB2 -= pd.sumB2;
         size -= pd.size;
-        eApp = CalcAppEnergy(sumR, sumG, sumB, sumR2, sumG2, sumB2, size);
-        eReg = CalcRegEnergy(sumRow, sumCol, sumRow2, sumCol2, size);
+        numP--;
+        eApp = CalcAppEnergy(sumR, sumG, sumB, sumR2, sumG2, sumB2, size, numP);
+        eReg = CalcRegEnergy(sumRow, sumCol, sumRow2, sumCol2, size, numP);
     }
 
     virtual void FinishInitialization()
     {
         initialSize = size;
-        eApp = CalcAppEnergy(sumR, sumG, sumB, sumR2, sumG2, sumB2, size);
-        eReg = CalcRegEnergy(sumRow, sumCol, sumRow2, sumCol2, size);
+        RecalculateEnergies();
+    }
+
+    virtual void RecalculateEnergies()
+    {
+        eApp = CalcAppEnergy(sumR, sumG, sumB, sumR2, sumG2, sumB2, size, numP);
+        eReg = CalcRegEnergy(sumRow, sumCol, sumRow2, sumCol2, size, numP);
     }
 
     void SetBorderLength(int bl) { borderLength = bl; }
@@ -583,7 +593,7 @@ public:
     //double sumIRow = 0.0;
 
 
-    unordered_set<Pixel*> pixels;
+    set<Pixel*> pixels;
     BInfoMapType boundaryData;
     Plane_d plane;
 
@@ -772,7 +782,7 @@ inline Pixel* PixelAt(Matrix<Pixel>& pixelsImg, int row, int col)
     else return nullptr;
 }
 
-inline double GetPriorEnergy(const unordered_map<Superpixel*, BInfo>& boundaryData)
+inline double GetPriorEnergy(const map<Superpixel*, BInfo>& boundaryData)
 {
     double result = 0.0;
 
@@ -782,7 +792,7 @@ inline double GetPriorEnergy(const unordered_map<Superpixel*, BInfo>& boundaryDa
     return result;
 }
 
-inline double GetSmoEnergy(const unordered_map<Superpixel*, BInfo>& boundaryData)
+inline double GetSmoEnergy(const map<Superpixel*, BInfo>& boundaryData)
 {
     double result = 0.0;
 

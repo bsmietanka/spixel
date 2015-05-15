@@ -19,7 +19,7 @@
 #include <opencv2/photo/photo.hpp>
 
 //[ For finding Memory leaks
-#define _CRTDBG_MAP_ALLOC
-#include <stdlib.h>
-#include <crtdbg.h>
+// #define _CRTDBG_MAP_ALLOC
+// #include <stdlib.h>
+// #include <crtdbg.h>
 //]

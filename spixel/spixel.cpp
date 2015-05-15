@@ -41,10 +41,10 @@ void test1()
 void test2()
 {
 
-    unordered_map<Superpixel*, int> map0;
+    map<Superpixel*, int> map0;
 
     for (int i = 0; i < 1000000; i++) {
-        unordered_map<Superpixel*, int> map1;
+        map<Superpixel*, int> map1;
         map1[new Superpixel()] = i;
         map1[new Superpixel()] = i + 2;
 
@@ -201,7 +201,10 @@ void ProcessFiles(const string& paramFile, const string& dirName, const string& 
             }
         }
         cout << "Processing: " << fileName << endl;
+
         SPSegmentationEngine engine(params, image, dispImage);
+
+
         if (params.stereo) {
             engine.ProcessImageStereo();
             engine.PrintDebugInfoStereo();
@@ -233,10 +236,14 @@ void ProcessFiles(const string& paramFile, const string& dirName, const string& 
     cout << endl;
 }
 
+
+
+
 int _tmain(int argc, char* argv[])
 {
     // test();
-    _CrtSetBreakAlloc(298);
+    //_CrtSetBreakAlloc(298);
+    srand(1);
     if (argc == 4) {
         ProcessFiles(argv[1], argv[2], argv[3], "");
     } else if (argc == 5) {
@@ -245,7 +252,7 @@ int _tmain(int argc, char* argv[])
         cout << "Usage: spixel config_file.yml file_dir file_pattern" << endl;
         cout << "   or: spixel config_file.yml file_dir file_pattern disparity_extension" << endl;
     }
-    _CrtDumpMemoryLeaks();
+    //_CrtDumpMemoryLeaks();
     return 0;
 }
 

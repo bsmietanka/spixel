@@ -9,11 +9,13 @@ sPixelSize: 3
 
 stereo: 1
 iterations: 1
+reSteps: 5
+maxLevels: 3
 
 # energy weights
-appWeight: 50.0
+appWeight: 200.0
 regWeight: 500.0
-lenWeight: 100.0
+lenWeight: 1000.0
 sizeWeight: 1000.0
 
 # stereo weights
@@ -25,14 +27,20 @@ sizeWeight: 1000.0
 #   hiPriorWeight: 5.0
 #   inlierThreshold: 3
 
-dispWeight: 1000.0
-smoWeight: 100
+dispWeight: 2000.0
+smoWeight: 0.2
 priorWeight: 0.2
 occPriorWeight: 15.0
-hiPriorWeight: 5.0
+hiPriorWeight: 5
 inlierThreshold: 3
 
-
+# best values:
+#   dispWeight: 4000.0
+#   smoWeight: 10
+#   priorWeight: 0.2
+#   occPriorWeight: 15.0
+#   hiPriorWeight: 0.5
+#   inlierThreshold: 3
 
 
 

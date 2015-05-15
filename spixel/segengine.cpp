@@ -3,6 +3,7 @@
 #include "functions.h"
 #include "utils.h"
 #include <unordered_map>
+#include <fstream>   
 
 // Local functions
 ///////////////////////////////////////////////////////////////////////////////
@@ -84,6 +85,7 @@ SPSegmentationEngine::SPSegmentationEngine(SPSegmentationParameters params, Mat 
 {
     img = ConvertRGBToLab(im);
     depthImg = AdjustDisparityImage(depthIm);
+    depthImgAdj = FillGapsInDisparityImage(depthImg);
     inliers = Mat1b(depthImg.rows, depthImg.cols);
 }
 
@@ -243,6 +245,7 @@ void SPSegmentationEngine::ProcessImageStereo()
 
     Timer t1;
     bool splitted;
+    int levelCount = 0;
 
     do {
         Timer t2;
@@ -254,9 +257,10 @@ void SPSegmentationEngine::ProcessImageStereo()
             ReEstimatePlaneParameters();
         }
         splitted = SplitPixels();
+        levelCount++;
         t2.Stop();
         performanceInfo.levelTimes.push_back(t2.GetTimeInSec());
-    } while (splitted);
+    } while (splitted && levelCount < params.maxLevels);
 
     t0.Stop();
     t1.Stop();
@@ -293,25 +297,36 @@ void SPSegmentationEngine::UpdatePlaneParameters()
     UpdateInliers();
 }
 
+void SPSegmentationEngine::PrintDebugInfo2()
+{
+    ofstream ofs("C:\\tmp\\debugse2.txt");
+    for (Superpixel* sp : superpixels) {
+        SuperpixelStereo* sps = (SuperpixelStereo*)sp;
+        ofs << sps->plane.x << " " << sps->plane.y << " " << sps->plane.z << endl;
+    }
+    ofs.close();
+}
 
 void SPSegmentationEngine::EstimatePlaneParameters()
 {
     Timer t;
 
-    #pragma omp parallel for
+    //#pragma omp parallel for
     for (int i = 0; i < superpixels.size(); i++) {
         SuperpixelStereo* sp = (SuperpixelStereo*)superpixels[i];
-        UpdateSuperpixelPlaneRANSAC(sp, depthImg);
+        UpdateSuperpixelPlaneRANSAC(sp, depthImgAdj);
     }
     t.Stop();
     performanceInfo.ransac += t.GetTimeInSec();
+    //PrintDebugInfo2();
 
-    // Re-estimate
     UpdateInliers();
     for (int i = 0; i < superpixels.size(); i++) {
         SuperpixelStereo* sp = (SuperpixelStereo*)superpixels[i];
-        sp->CalcPlaneLeastSquares(depthImg);
+        sp->CalcPlaneLeastSquares(depthImgAdj);
     }
+    imwrite("c:\\tmp\\dbgdisp.png", GetDisparity());
+
 }
 
 void SPSegmentationEngine::InitializeStereoEnergies()
@@ -372,7 +387,7 @@ void SPSegmentationEngine::UpdateBoundaryData()
         //double eCo = params.smoWeight*eSmoCoSum / (sp->GetSize() + sq->GetSize());
         //double eOcc = params.smoWeight*eSmoOcc + params.priorWeight*params.occPriorWeight;
         double eHi = eSmoHiSum / item.second.bSize + params.hiPriorWeight;
-        double eCo = eSmoCoSum / (sp->GetSize() + sq->GetSize());
+        double eCo = eSmoCoSum / (sp->GetSize() + sq->GetSize()); // + 0
         double eOcc = params.occPriorWeight;
 
         auto& bd = sp->boundaryData[sq];
@@ -467,6 +482,9 @@ bool SPSegmentationEngine::SplitPixels()
     }
     pixelsImg = newPixelsImg;
 
+    for (Superpixel* sp : superpixels) {
+        sp->RecalculateEnergies();
+    }
     if (params.stereo) {
         for (Pixel& p : pixelsImg) {
             ((SuperpixelStereo*)p.superPixel)->AddToPixelSet(&p);
@@ -833,16 +851,21 @@ void SPSegmentationEngine::UpdateInliers()
             Pixel* p = ppImg(i, j);
             SuperpixelStereo* sps = (SuperpixelStereo*)p->superPixel;
             const double& disp = depthImg(i, j);
-            bool inlier = fabs(DotProduct(sps->plane, i, j, 1.0) - disp) < params.inlierThreshold;
 
-            inliers(i, j) = inlier;
-            if (inlier) {
-                sps->sumIRow += i; sps->sumIRow2 += i*i;
-                sps->sumICol += j; sps->sumICol2 += j*j;
-                sps->sumIRowCol += i*j;
-                sps->sumIRowD += i*disp; sps->sumIColD += j*disp;
-                sps->sumID += disp;
-                sps->nI++;
+            if (disp <= 0) {
+                inliers(i, j) = false;
+            } else {
+                bool inlier = fabs(DotProduct(sps->plane, i, j, 1.0) - disp) < params.inlierThreshold;
+
+                inliers(i, j) = inlier;
+                if (inlier) {
+                    sps->sumIRow += i; sps->sumIRow2 += i*i;
+                    sps->sumICol += j; sps->sumICol2 += j*j;
+                    sps->sumIRowCol += i*j;
+                    sps->sumIRowD += i*disp; sps->sumIColD += j*disp;
+                    sps->sumID += disp;
+                    sps->nI++;
+                }
             }
         }
     }

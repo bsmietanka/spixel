@@ -40,6 +40,7 @@ void Pixel::Split(const cv::Mat& img, int row1, int row2, int col1, int col2, Pi
     p12.border = border & (BTopFlag | BRightFlag);
     p21.border = border & (BLeftFlag | BBottomFlag);
     p22.border = border & (BRightFlag | BBottomFlag);
+    superPixel->numP += 3;
 }
 
 void Pixel::SplitRow(const cv::Mat& img, int row1, int row2, int col, Pixel& p11, Pixel& p21)
@@ -54,6 +55,7 @@ void Pixel::SplitRow(const cv::Mat& img, int row1, int row2, int col, Pixel& p11
     p21.superPixel = superPixel;
     p11.border = border & (BTopFlag | BLeftFlag | BRightFlag);
     p21.border = border & (BLeftFlag | BBottomFlag | BRightFlag);
+    superPixel->numP++;
 }
 
 void Pixel::CopyTo(const cv::Mat& img, int row, int col, Pixel& p11)
@@ -78,6 +80,7 @@ void Pixel::SplitColumn(const cv::Mat& img, int row, int col1, int col2, Pixel& 
     p12.superPixel = superPixel;
     p11.border = border & (BTopFlag | BLeftFlag | BBottomFlag);
     p12.border = border & (BTopFlag | BRightFlag | BBottomFlag);
+    superPixel->numP++;
 }
 
 void Pixel::UpdateInliers(const cv::Mat1d& dispImg, double threshold, cv::Mat1b& inliers) const
@@ -92,8 +95,6 @@ void Pixel::UpdateInliers(const cv::Mat1d& dispImg, double threshold, cv::Mat1b&
     }
 }
 
-//DEFINE_CLASS_ALLOCATOR_2(Pixel, 10000000)
-
 // Superpixel defininions
 ///////////////////////////
 
@@ -101,9 +102,9 @@ void Pixel::UpdateInliers(const cv::Mat1d& dispImg, double threshold, cv::Mat1b&
 void Superpixel::GetRemovePixelData(const PixelData& pd, PixelChangeData& pcd) const
 {
     pcd.newEApp = CalcAppEnergy(sumR - pd.sumR, sumG - pd.sumG, sumB - pd.sumB, 
-        sumR2 - pd.sumR2, sumG2 - pd.sumG2, sumB2 - pd.sumB2, size - pd.size);
+        sumR2 - pd.sumR2, sumG2 - pd.sumG2, sumB2 - pd.sumB2, size - pd.size, numP - 1);
     pcd.newEReg = CalcRegEnergy(sumRow - pd.sumRow, sumCol - pd.sumCol,
-        sumRow2 - pd.sumRow2, sumCol2 - pd.sumCol2, size - pd.size);
+        sumRow2 - pd.sumRow2, sumCol2 - pd.sumCol2, size - pd.size, numP - 1);
     pcd.newSize = size - pd.size;
 }
 
@@ -112,9 +113,9 @@ void Superpixel::GetRemovePixelData(const PixelData& pd, PixelChangeData& pcd) c
 void Superpixel::GetAddPixelData(const PixelData& pd, PixelChangeData& pcd) const
 {
     pcd.newEApp = CalcAppEnergy(sumR + pd.sumR, sumG + pd.sumG, sumB + pd.sumB,
-        sumR2 + pd.sumR2, sumG2 + pd.sumG2, sumB2 + pd.sumB2, size + pd.size);
+        sumR2 + pd.sumR2, sumG2 + pd.sumG2, sumB2 + pd.sumB2, size + pd.size, numP + 1);
     pcd.newEReg = CalcRegEnergy(sumRow + pd.sumRow, sumCol + pd.sumCol,
-        sumRow2 + pd.sumRow2, sumCol2 + pd.sumCol2, size + pd.size);
+        sumRow2 + pd.sumRow2, sumCol2 + pd.sumCol2, size + pd.size, numP + 1);
     pcd.newSize = size + pd.size;
 }
 
@@ -340,7 +341,7 @@ void SuperpixelStereo::CheckRegEnergy()
     if (fabs(rr - sumRow) > 0.01 || fabs(rr2 - sumRow2) > 0.01 || fabs(cc - sumCol) > 0.01 || fabs(cc2 - sumCol2) > 0.01) {
         cout << "colrow sum mismatch";
     }
-    if (fabs(eReg - CalcRegEnergy(sumRow, sumCol, sumRow2, sumCol2, size)) > 0.01) {
+    if (fabs(eReg - CalcRegEnergy(sumRow, sumCol, sumRow2, sumCol2, size, numP)) > 0.01) {
         cout << "RE mismatch";
     }
 }

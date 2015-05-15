@@ -29,7 +29,7 @@ struct SPSegmentationParameters {
     int iterations = 1;
     int maxUpdates = 400000;
     int reSteps = 5;
-
+    int maxLevels = 10;
 
     bool stereo = false;
 
@@ -52,6 +52,7 @@ struct SPSegmentationParameters {
         UpdateFromNode(reSteps, node["reSteps"]);
         UpdateFromNode(inlierThreshold, node["inlierThreshold"]);
         UpdateFromNode(maxUpdates, node["maxUpdates"]);
+        UpdateFromNode(maxLevels, node["maxLevels"]);
     }
 };
 
@@ -79,7 +80,8 @@ private:
 
     // Depth image (required for stereo)
     Mat1d depthImg;
-    
+    Mat1d depthImgAdj;
+
     // Image to process (in lab color space)
     Mat img;
 
@@ -101,6 +103,7 @@ public:
     Mat GetDisparity() const;
     string GetSegmentedImageInfo();
     void PrintDebugInfo();
+    void PrintDebugInfo2();
     void PrintDebugInfoStereo();
     void PrintPerformanceInfo();
     int GetNoOfSuperpixels() const;
