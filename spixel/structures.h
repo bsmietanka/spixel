@@ -4,8 +4,8 @@
 #include <vector>
 #include <memory>
 #include <cstdint>
-#include <set>
-#include <map>
+#include <unordered_set>
+#include <unordered_map>
 #include "sallocator.h"
 
 using namespace std;
@@ -18,6 +18,35 @@ typedef std::uint8_t byte;
 typedef cv::Point3d Plane_d;
 
 const double eps = 1.0E-6;
+
+
+// Constants
+//////////////
+
+// Border (boundary) types (hinge, coplanarity, etc.)
+const int BTCo = 1;
+const int BTHi = 2;
+const int BTLo = 3;
+const int BTRo = 4;
+
+
+// Border position flags
+const byte BLeftFlag = 1;
+const byte BRightFlag = 2;
+const byte BTopFlag = 4;
+const byte BBottomFlag = 8;
+
+
+// Simple structs and classes
+///////////////////////////////
+
+struct BInfo {
+    int type = 0;               // Boundary type BTCo, BTHi, ...
+    double typePrior = 0;       // Prior weight (dep. of type)
+    int length = 0;             // Length of boundary (between two superpixels)
+    double coSum = 0.0;         // Smo value (sum) for coplanarity
+    double hiSum = 0.0;         // Smo value (sum) for hinge
+};
 
 
 // Functions
@@ -127,14 +156,7 @@ class Superpixel;
 class SuperpixelStereo;
 
 
-struct BInfo {
-    int type = 0;
-    int length = 0;
-    double prior = 0.0;
-    double smo = 0.0;
-};
-
-typedef map<Superpixel*, BInfo> BInfoMapType;
+//typedef unordered_map<Superpixel*, BInfo> BInfoMapType;
 
 struct PixelData {
     Pixel* p;
@@ -145,6 +167,9 @@ struct PixelData {
     double sumDispP, sumDispQ;
     int size;
 };
+
+
+typedef unordered_map<SuperpixelStereo*, BInfo> BorderDataMap;
 
 // Note: energy deltas below are "energy_before - energy_after"
 struct PixelMoveData {
@@ -160,7 +185,7 @@ struct PixelMoveData {
     int pSize;          // superpixel of p size
     int qSize;          // superpixel of q size
     PixelData pixelData;
-    BInfoMapType bDataP, bDataQ;
+    BorderDataMap bDataP, bDataQ;
 };
 
 struct PixelChangeData {
@@ -171,21 +196,8 @@ struct PixelChangeData {
 
 struct PixelChangeDataStereo : public PixelChangeData {
     double newEDisp;
-    BInfoMapType newBoundaryData;
 };
 
-
-// Border position flags
-const byte BLeftFlag = 1;
-const byte BRightFlag = 2;
-const byte BTopFlag = 4;
-const byte BBottomFlag = 8;
-
-// Border types (hinge, coplanarity, etc.)
-const int BTCo = 1;
-const int BTHi = 2;
-const int BTLo = 3;
-const int BTRo = 4;
 
 
 struct Pixel { // : public custom_alloc {
@@ -274,9 +286,10 @@ struct Pixel { // : public custom_alloc {
         for (int i = ulr; i < (int)lrr; i++) {
             for (int j = ulc; j < (int)lrc; j++) {
                 const double& disp = dispImg(i, j);
-                double delta = DotProduct(plane, i, j, 1.0) - disp;
-                if (fabs(delta) < inlierThresh) {
-                    sumDisp += delta*delta;
+                if (disp > 0) {
+                    double delta = DotProduct(plane, i, j, 1.0) - disp;
+                    if (fabs(delta) < inlierThresh) sumDisp += delta*delta;
+                    else sumDisp += noDisp;
                 } else {
                     sumDisp += noDisp;
                 }
@@ -593,8 +606,8 @@ public:
     //double sumIRow = 0.0;
 
 
-    set<Pixel*> pixels;
-    BInfoMapType boundaryData;
+    unordered_set<Pixel*> pixels;
+    BorderDataMap boundaryData;
     Plane_d plane;
 
     SuperpixelStereo() : Superpixel() { }
@@ -630,7 +643,7 @@ public:
         double result = 0.0;
 
         for (auto pair : boundaryData) {
-            result += pair.second.prior;
+            result += pair.second.typePrior;
         }
         return result;
     }
@@ -639,9 +652,12 @@ public:
     {
         double result = 0.0;
 
-        for (auto pair : boundaryData) {
-            if (pair.second.length != 0)
-                result += pair.second.smo / pair.second.length;
+        for (auto& bdItem : boundaryData) {
+            const BInfo& bInfo = bdItem.second;
+            if (bInfo.length > 0) {
+                if (bInfo.type == BTCo) result += bInfo.coSum / (size + bdItem.first->size);
+                else if (bInfo.type == BTHi) result += bInfo.coSum / bInfo.length;
+            }
         }
         return result;
     }
@@ -662,14 +678,8 @@ public:
         pixels.insert(p3); pixels.insert(p4);
     }
 
-    void GetRemovePixelDataStereo(const PixelData& pd, 
-        const Matrix<Pixel>& pixelsImg, const cv::Mat1d& dispImg, const cv::Mat1b& inliers,
-        Pixel* p, Pixel* q,
-        PixelChangeDataStereo& pcd) const;
-    void GetAddPixelDataStereo(const PixelData& pd, 
-        const Matrix<Pixel>& pixelsImg, const cv::Mat1d& dispImg, const cv::Mat1b& inliers,
-        Pixel* p, Pixel* q,
-        PixelChangeDataStereo& pcd) const;
+    void GetRemovePixelDataStereo(const PixelData& pd, PixelChangeDataStereo& pcd) const;
+    void GetAddPixelDataStereo(const PixelData& pd, PixelChangeDataStereo& pcd) const;
 
     // For debug purposes!
     double CalcDispEnergy(const cv::Mat1d& dispImg, double inlierThresh, double noDisp);
@@ -782,23 +792,13 @@ inline Pixel* PixelAt(Matrix<Pixel>& pixelsImg, int row, int col)
     else return nullptr;
 }
 
-inline double GetPriorEnergy(const map<Superpixel*, BInfo>& boundaryData)
-{
-    double result = 0.0;
+//inline double GetPriorEnergy(const unordered_map<Superpixel*, BInfo>& boundaryData)
+//{
+//    double result = 0.0;
+//
+//    for (auto pair : boundaryData) {
+//        result += pair.second.prior;
+//    }
+//    return result;
+//}
 
-    for (auto pair : boundaryData) {
-        result += pair.second.prior;
-    }
-    return result;
-}
-
-inline double GetSmoEnergy(const map<Superpixel*, BInfo>& boundaryData)
-{
-    double result = 0.0;
-
-    for (auto pair : boundaryData) {
-        if (pair.second.length != 0)
-            result += pair.second.smo / pair.second.length;
-    }
-    return result;
-}

@@ -2,7 +2,6 @@
 #include "structures.h"
 #include "functions.h"
 #include <functional>
-#include <Eigen/Dense>
 
 // Local functions, structures, classes
 ///////////////////////////////////////////////////////////////////////////////
@@ -139,121 +138,6 @@ ostream& operator<<(ostream& os, const Timer& t)
     return os;
 }
 
-// Debug
-///////////////////////////////////////////////////////////////////////////////
-
-///
-
-struct DisparityPixel {
-    double x;
-    double y;
-    double d;
-};
-
-
-
-int computeRequiredSamplingTotal(const int drawTotal, const int inlierTotal, const int pointTotal, const int currentSamplingTotal, const double confidenceLevel)
-{
-    double ep = 1 - static_cast<double>(inlierTotal) / static_cast<double>(pointTotal);
-    if (ep == 1.0) {
-        ep = 0.5;
-    }
-
-    int newSamplingTotal = static_cast<int>(log(1 - confidenceLevel) / log(1 - pow(1 - ep, drawTotal)) + 0.5);
-    if (newSamplingTotal < currentSamplingTotal) {
-        return newSamplingTotal;
-    } else {
-        return currentSamplingTotal;
-    }
-}
-
-std::vector<double> estimateDisparityPlaneParameterRANSAC(const std::vector<DisparityPixel>& disparityPixels)
-{
-    const double inlierThreshold = 1.0;
-    const double confidenceLevel = 0.99;
-
-    int pixelTotal = static_cast<int>(disparityPixels.size());
-
-    int samplingTotal = pixelTotal * 2;
-
-    int bestInlierTotal = 0;
-    std::vector<bool> bestInlierFlags(pixelTotal);
-    int samplingCount = 0;
-    //srand(time(NULL));
-    while (samplingCount < samplingTotal) {
-        // Randomly select 3 pixels
-        int drawIndices[3];
-        drawIndices[0] = rand() % pixelTotal;
-        drawIndices[1] = rand() % pixelTotal;
-        while (drawIndices[1] == drawIndices[0]) drawIndices[1] = rand() % pixelTotal;
-        drawIndices[2] = rand() % pixelTotal;
-        while (drawIndices[2] == drawIndices[1] || drawIndices[2] == drawIndices[0]
-            || (disparityPixels[drawIndices[0]].x == disparityPixels[drawIndices[1]].x && disparityPixels[drawIndices[0]].x == disparityPixels[drawIndices[2]].x)
-            || (disparityPixels[drawIndices[0]].y == disparityPixels[drawIndices[1]].y && disparityPixels[drawIndices[0]].y == disparityPixels[drawIndices[2]].y)) {
-            drawIndices[2] = rand() % pixelTotal;
-        }
-
-        // Compute plane parameters
-        Eigen::Matrix3d matPosition;
-        Eigen::Vector3d vecDisparity;
-        for (int i = 0; i < 3; ++i) {
-            matPosition(i, 0) = disparityPixels[drawIndices[i]].x;
-            matPosition(i, 1) = disparityPixels[drawIndices[i]].y;
-            matPosition(i, 2) = 1.0;
-            vecDisparity(i) = disparityPixels[drawIndices[i]].d;
-        }
-        Eigen::Vector3d planeParameter = matPosition.colPivHouseholderQr().solve(vecDisparity);
-
-        // Count the number of inliers
-        int inlierTotal = 0;
-        std::vector<bool> inlierFlags(pixelTotal);
-        for (int pixelIndex = 0; pixelIndex < pixelTotal; ++pixelIndex) {
-            double estimatedDisparity = planeParameter(0)*disparityPixels[pixelIndex].x + planeParameter(1)*disparityPixels[pixelIndex].y + planeParameter(2);
-            if (fabs(estimatedDisparity - disparityPixels[pixelIndex].d) <= inlierThreshold) {
-                ++inlierTotal;
-                inlierFlags[pixelIndex] = true;
-            } else {
-                inlierFlags[pixelIndex] = false;
-            }
-        }
-
-        // Update best inliers
-        if (inlierTotal > bestInlierTotal) {
-            bestInlierTotal = inlierTotal;
-            bestInlierFlags = inlierFlags;
-
-            samplingTotal = computeRequiredSamplingTotal(3, bestInlierTotal, pixelTotal, samplingTotal, confidenceLevel);
-        }
-
-        // Increment
-        ++samplingCount;
-    }
-
-    // Least-square estimation
-    Eigen::MatrixXd matPosition(bestInlierTotal, 3);
-    Eigen::VectorXd vecDisparity(bestInlierTotal);
-    int inlierIndex = 0;
-    for (int pixelIndex = 0; pixelIndex < pixelTotal; ++pixelIndex) {
-        if (bestInlierFlags[pixelIndex]) {
-            matPosition(inlierIndex, 0) = disparityPixels[pixelIndex].x;
-            matPosition(inlierIndex, 1) = disparityPixels[pixelIndex].y;
-            matPosition(inlierIndex, 2) = 1.0;
-            vecDisparity(inlierIndex) = disparityPixels[pixelIndex].d;
-            ++inlierIndex;
-        }
-    }
-    Eigen::Vector3d vecPlaneParameter = matPosition.colPivHouseholderQr().solve(vecDisparity);
-    std::vector<double> planeParameter(3);
-    planeParameter[0] = vecPlaneParameter(0);
-    planeParameter[1] = vecPlaneParameter(1);
-    planeParameter[2] = vecPlaneParameter(2);
-
-    return planeParameter;
-
-}
-
-///////////////////////////////////////////////////////////////////////////////
-
 // Function definitions
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -363,8 +247,18 @@ void MovePixelStereo(Matrix<Pixel>& pixelsImg, PixelMoveData& pmd)
     SuperpixelStereo* sp = (SuperpixelStereo*)pmd.p->superPixel;
     SuperpixelStereo* sq = (SuperpixelStereo*)pmd.q->superPixel;
 
+    // Update boundary
     sp->boundaryData = std::move(pmd.bDataP);
     sq->boundaryData = std::move(pmd.bDataQ);
+
+    // Update neighboring boundaries
+    for (auto& bdIter : sp->boundaryData) {
+        if (bdIter.first != sq) bdIter.first->boundaryData[sp] = bdIter.second;
+    }
+    for (auto& bdIter : sq->boundaryData) {
+        if (bdIter.first != sp) bdIter.first->boundaryData[sq] = bdIter.second;
+    }
+
 }
 
 // Return true if superpixel sp is connected in region defined by upper left/lower right corners of pixelsImg
@@ -484,8 +378,9 @@ bool RANSACPlane(const vector<cv::Point3d>& pixels, Plane_d& plane)
         const cv::Point3d& p2 = pixels[rand() % pixels.size()];
         const cv::Point3d& p3 = pixels[rand() % pixels.size()];
 
-        if (Plane3PDebug(p1, p2, p3, stepPlane)) {
+        if (Plane3P(p1, p2, p3, stepPlane)) {
             int inlierCount = 0;
+
             for (const cv::Point3d& p : pixels) {
                 if (fabs(p.x*stepPlane.x + p.y*stepPlane.y + stepPlane.z - p.z) < inlierThreshold) {
                     inlierCount++;
@@ -506,85 +401,49 @@ bool RANSACPlane(const vector<cv::Point3d>& pixels, Plane_d& plane)
 }
 
 
-bool RANSACPlaneDebug(const vector<cv::Point3d>& pixels, Plane_d& plane)
-{
-    bool ret = RANSACPlane(pixels, plane);
-
-    double sumRow = 0;
-    double sumRow2 = 0;
-    double sumCol = 0;
-    double sumCol2 = 0;
-    double sumRowCol = 0;
-    double sumRowD = 0.0;
-    double sumColD = 0.0;
-    double sumD = 0.0;
-    int n = 0;
-
-    for (const cv::Point3d& p : pixels) {
-        if (fabs(DotProduct(plane, p.x, p.y, 1.0) - p.z) < 1.0) {
-            sumRow += p.x; sumCol += p.y;
-            sumRow2 += p.x*p.x; sumCol2 += p.y*p.y;
-            sumRowCol += p.x*p.y;
-            sumColD += p.y*p.z; sumRowD += p.x*p.z;
-            sumD += p.z;
-            n++;
-        }
-    }
-
-    LeastSquaresPlane(sumRow, sumRow2, sumCol, sumCol2, sumRowCol, sumRowD, sumColD, sumD, n, plane);
-    int inliersMe = 0;
-
-    for (const cv::Point3d& p : pixels) {
-        if (fabs(DotProduct(plane, p.x, p.y, 1.0) - p.z) < 1.0) {
-            inliersMe++;
-        }
-    }
-
-    std::vector<DisparityPixel> disparityPixels;
-    
-    disparityPixels.resize(pixels.size());
-
-    for (int i = 0; i < pixels.size(); i++) {
-        disparityPixels[i].x = pixels[i].x;
-        disparityPixels[i].y = pixels[i].y;
-        disparityPixels[i].d = pixels[i].z;
-    }
-
-    std::vector<double> dbg = estimateDisparityPlaneParameterRANSAC(disparityPixels);
-    int inliersHe = 0;
-
-    for (const cv::Point3d& p : pixels) {
-        if (fabs(dbg[0]*p.x + dbg[1]*p.y + dbg[2] - p.z) < 1.0) {
-            inliersHe++;
-        }
-    }
-
-
-    double xdiff = dbg[0] - plane.x;
-    double ydiff = dbg[1] - plane.y;
-    double ddiff = dbg[2] - plane.z;
-
-    plane.x = dbg[0];
-    plane.y = dbg[1];
-    plane.z = dbg[2];
-
-    return ret;
-}
-
-
 // Should be thread-safe!
-bool UpdateSuperpixelPlaneRANSAC(SuperpixelStereo* sp, const cv::Mat1d& depthImg)
+void InitSuperpixelPlane(SuperpixelStereo* sp, const cv::Mat1d& depthImg)
 {
     vector<cv::Point3d> pixels;
 
     pixels.reserve(sp->GetSize());
     for (Pixel* p : sp->pixels) {
         p->AddDispPixels(depthImg, pixels);
-
     }
-    if (!RANSACPlaneDebug(pixels, sp->plane)) 
-        return false;
-    return true;
+    
+    // Sort pixels to de-randomize thing (for debug purposes)
+    sort(pixels.begin(), pixels.end(), [](const cv::Point3d& p1, const cv::Point3d& p2) { 
+        return p1.x < p2.x || p1.x == p2.x && p1.y < p2.y || p1.x == p2.x && p1.y == p2.y && p1.z < p2.z;  
+    });
+
+    if (!RANSACPlane(pixels, sp->plane)) {
+        sp->plane = Plane_d(0, 0, 1.0);
+    } else {
+        // Least squares re-estimation
+
+        double sumRow = 0;
+        double sumRow2 = 0;
+        double sumCol = 0;
+        double sumCol2 = 0;
+        double sumRowCol = 0;
+        double sumRowD = 0.0;
+        double sumColD = 0.0;
+        double sumD = 0.0;
+        int n = 0;
+
+        for (const cv::Point3d& p : pixels) {
+            if (fabs(DotProduct(sp->plane, p.x, p.y, 1.0) - p.z) < 1.0) {
+                sumRow += p.x; sumCol += p.y;
+                sumRow2 += p.x*p.x; sumCol2 += p.y*p.y;
+                sumRowCol += p.x*p.y;
+                sumColD += p.y*p.z; sumRowD += p.x*p.z;
+                sumD += p.z;
+                n++;
+            }
+        }
+
+        LeastSquaresPlane(sumRow, sumRow2, sumCol, sumCol2, sumRowCol, sumRowD, sumColD, sumD, n, sp->plane);
+    }
 }
 
 void CalcOccSmoothnessEnergy(SuperpixelStereo* sp, SuperpixelStereo* sq, double occWeight, double hingeWeight,

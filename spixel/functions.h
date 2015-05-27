@@ -88,7 +88,7 @@ bool Plane3P(const cv::Point3d& p1, const cv::Point3d& p2, const cv::Point3d& p3
 // Returns false if pixels.size() < 3 or no 3 points were found to 
 // form a plane
 bool RANSACPlane(const vector<cv::Point3d>& pixels, Plane_d& plane);
-bool UpdateSuperpixelPlaneRANSAC(SuperpixelStereo* sp, const cv::Mat1d& depthImg);
+void InitSuperpixelPlane(SuperpixelStereo* sp, const cv::Mat1d& depthImg);
 
 void LeastSquaresPlane(int sumIRow, int sumIRow2, int sumICol, int sumICol2, int sumIRowCol, double sumIRowD, double sumIColD,
     double sumID, int nI, Plane_d& plane);

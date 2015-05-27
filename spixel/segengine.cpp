@@ -9,7 +9,7 @@
 ///////////////////////////////////////////////////////////////////////////////
 
 double TotalEnergyDelta(const SPSegmentationParameters& params, PixelMoveData* pmd) 
-{ 
+{
     double eSum = 0.0;
     int initPSizeQuarter = pmd->p->superPixel->GetInitialSize()/4;
     
@@ -27,6 +27,115 @@ double TotalEnergyDelta(const SPSegmentationParameters& params, PixelMoveData* p
     return eSum;
 }
 
+void UpdateHingeBoundaryData(const Pixel* r, byte sideFlag, const Pixel* sideP, SuperpixelStereo* sp, SuperpixelStereo* sq,
+    const cv::Mat1b& inliers,
+    BorderDataMap& bcdp, BorderDataMap& bcdq,
+    unordered_set<SuperpixelStereo*> nbsps)
+{
+    if (r == nullptr || sideP == nullptr) return;
+
+    SuperpixelStereo* sr = (SuperpixelStereo*)r->superPixel;
+    double sum = 0;
+    int count = 0;
+
+    sideP->CalcHiSmoothnessSum(sideFlag, inliers, sp->plane, sq->plane, sum, count);
+
+    if (sr == sp) {
+        bcdp[sq].hiSum += sum;
+        bcdp[sq].length += count;
+        bcdq[sp].hiSum += sum;
+        bcdq[sp].length += count;
+    } else if (sr == sq) {
+        bcdp[sq].hiSum -= sum;
+        bcdp[sq].length -= count;
+        bcdq[sp].hiSum -= sum;
+        bcdq[sp].length -= count;
+    } else {
+        bcdp[sr].hiSum -= sum;
+        bcdp[sr].length -= count;
+        bcdq[sr].hiSum += sum;
+        bcdq[sr].length += count;
+        nbsps.insert(sr);
+    }
+}
+
+void EstimateBorderType(const SPSegmentationParameters& params, SuperpixelStereo* sp, int newSpSize, 
+    SuperpixelStereo* sq, int newSqSize, BInfo& bInfo)
+{
+    double eHi = bInfo.hiSum / bInfo.length + params.hiPriorWeight;
+    double eCo = bInfo.coSum / (newSpSize + newSqSize); // + 0
+    double eOcc = params.occPriorWeight;
+
+    if (eCo <= eHi && eCo < eOcc) {
+        bInfo.type = BTCo;
+        bInfo.typePrior = 0;
+    } else if (eHi <= eOcc && eHi <= eCo) {
+        bInfo.type = BTHi;
+        bInfo.typePrior = params.hiPriorWeight;
+    } else {
+        bInfo.type = BTLo;
+        bInfo.typePrior = params.occPriorWeight;
+    }
+}
+
+void CalcBorderChangeDataStereo(const Matrix<Pixel>& pixelsImg, const cv::Mat1b& inliers, 
+    const SPSegmentationParameters& params, Pixel* p, Pixel* q, BorderDataMap& bcdp, BorderDataMap& bcdq)
+{
+    // Move p from sp -> sq
+    SuperpixelStereo* sp = (SuperpixelStereo*)p->superPixel;
+    SuperpixelStereo* sq = (SuperpixelStereo*)q->superPixel;
+    const Pixel* r;
+    unordered_set<SuperpixelStereo*> nbsps;    // Neighbors of p (other than sp and sq), make something more lightwight
+
+    // Make copy
+    bcdp = sp->boundaryData;
+    bcdq = sq->boundaryData;
+
+    // Update hinge sums for neighbors of p
+    r = PixelAt(pixelsImg, p->row, p->col + 1);
+    UpdateHingeBoundaryData(r, BLeftFlag, r, sp, sq, inliers, bcdp, bcdq, nbsps);
+    r = PixelAt(pixelsImg, p->row, p->col - 1);
+    UpdateHingeBoundaryData(r, BLeftFlag, p, sp, sq, inliers, bcdp, bcdq, nbsps);
+    r = PixelAt(pixelsImg, p->row + 1, p->col);
+    UpdateHingeBoundaryData(r, BTopFlag, r, sp, sq, inliers, bcdp, bcdq, nbsps);
+    r = PixelAt(pixelsImg, p->row - 1, p->col);
+    UpdateHingeBoundaryData(r, BTopFlag, p, sp, sq, inliers, bcdp, bcdq, nbsps);
+
+    // Update coplanarity sums for neighbors of sp and sq
+    for (auto& bdIter : sp->boundaryData) {
+        SuperpixelStereo* sr = bdIter.first;
+        bcdp[sr].coSum -= p->CalcCoSmoothnessSum(inliers, sp->plane, sr->plane);
+    }
+    for (auto& bdIter : sq->boundaryData) {
+        SuperpixelStereo* sr = bdIter.first;
+        bcdp[sr].coSum += p->CalcCoSmoothnessSum(inliers, sp->plane, sr->plane);
+        nbsps.erase(sr);
+    }
+
+    // Eventual new neighbor(s) of sq
+    for (SuperpixelStereo* snew : nbsps) {
+        bcdq[snew].coSum = CalcCoSmoothnessSum(inliers, sq, snew);
+    }
+
+    nbsps.clear();
+
+    // Remove "neighbors" of sp with length 0
+    for (auto& bdIter : bcdp) {
+        if (bdIter.second.length <= 0) nbsps.insert(bdIter.first);
+    }
+    for (SuperpixelStereo* sr : nbsps) {
+        bcdp.erase(sr);
+    }
+
+    // Estimate type for each neighbor
+    for (auto& bdIter : bcdp) {
+        EstimateBorderType(params, sp, sp->GetSize() - p->GetSize(), bdIter.first, bdIter.first->GetSize() + ((bdIter.first == sq) ? p->GetSize() : 0), bdIter.second);
+    }
+    for (auto& bdIter : bcdq) {
+        EstimateBorderType(params, sq, sq->GetSize() + p->GetSize(), bdIter.first, bdIter.first->GetSize() - ((bdIter.first == sp) ? p->GetSize() : 0), bdIter.second);
+    }
+
+}
 
 PixelMoveData* FindBestMoveData(const SPSegmentationParameters& params, PixelMoveData d[4])
 {
@@ -50,6 +159,21 @@ PixelMoveData* FindBestMoveData(const SPSegmentationParameters& params, PixelMov
     if (!d1->allowed || TotalEnergyDelta(params, d1) <= 0) return (!d2->allowed || TotalEnergyDelta(params, d2) <= 0) ? nullptr : d2;
     else if (!d2->allowed || TotalEnergyDelta(params, d2) <= 0) return d1;
     else return TotalEnergyDelta(params, d1) < TotalEnergyDelta(params, d2) ? d2 : d1;
+}
+
+
+double GetSmoEnergy(const BorderDataMap& bd, SuperpixelStereo* sp, int pSize, SuperpixelStereo* sq, int qSize)
+{
+    double result = 0.0;
+
+    for (auto& bdItem : bd) {
+        const BInfo& bInfo = bdItem.second;
+        if (bInfo.length > 0) {
+            if (bInfo.type == BTCo) result += bInfo.coSum / (pSize + (bdItem.first == sq ? qSize : bdItem.first->GetSize()));
+            else if (bInfo.type == BTHi) result += bInfo.coSum / bInfo.length;
+        }
+    }
+    return result;
 }
 
 // SPSegmentationParameters
@@ -158,18 +282,6 @@ void SPSegmentationEngine::Initialize(Superpixel* spGenerator())
 
 }
 
-struct BoundaryData {
-    int bSize;      // Boundary size
-    double hiSum;
-};
-
-typedef pair<SuperpixelStereo*, SuperpixelStereo*> SPSPair;
-
-SPSPair OrderedPair(SuperpixelStereo* sp, SuperpixelStereo* sq)
-{
-    return sp < sq ? SPSPair(sp, sq) : SPSPair(sq, sp);
-}
-
 void SPSegmentationEngine::InitializeStereo()
 {
     Initialize([]() -> Superpixel* { return new SuperpixelStereo(); });
@@ -247,11 +359,17 @@ void SPSegmentationEngine::ProcessImageStereo()
     bool splitted;
     int levelCount = 0;
 
+    imwrite("c:\\tmp\\a--.png", this->GetSegmentedImage());
+
     do {
         Timer t2;
         performanceInfo.levelIterations.push_back(0);
         for (int iteration = 0; iteration < params.iterations; iteration++) {
             int iters = IterateMoves();
+
+            stringstream ss;
+            ss << levelCount;
+            imwrite("c:\\tmp\\a-" + ss.str() + ".png", this->GetSegmentedImage());
             if (iters > performanceInfo.levelIterations.back())
                 performanceInfo.levelIterations.back() = iters;
             ReEstimatePlaneParameters();
@@ -314,18 +432,14 @@ void SPSegmentationEngine::EstimatePlaneParameters()
     //#pragma omp parallel for
     for (int i = 0; i < superpixels.size(); i++) {
         SuperpixelStereo* sp = (SuperpixelStereo*)superpixels[i];
-        UpdateSuperpixelPlaneRANSAC(sp, depthImgAdj);
+        InitSuperpixelPlane(sp, depthImgAdj);
     }
     t.Stop();
     performanceInfo.ransac += t.GetTimeInSec();
     //PrintDebugInfo2();
 
-    UpdateInliers();
-    for (int i = 0; i < superpixels.size(); i++) {
-        SuperpixelStereo* sp = (SuperpixelStereo*)superpixels[i];
-        sp->CalcPlaneLeastSquares(depthImgAdj);
-    }
-    imwrite("c:\\tmp\\dbgdisp.png", GetDisparity());
+    //UpdateInliers();
+    //imwrite("c:\\tmp\\dbgdisp.png", GetDisparity());
 
 }
 
@@ -348,9 +462,7 @@ void SPSegmentationEngine::UpdateBoundaryData()
 {
     const int directions[2][3] = { { 0, -1, BLeftFlag }, { -1, 0, BTopFlag } };
 
-    map<SPSPair, BoundaryData> boundaryMap;
-
-    // update map
+    // update length & hiSum (written to smoSum)
     for (Pixel& p : pixelsImg) {
         SuperpixelStereo* sp = (SuperpixelStereo*)p.superPixel;
         SuperpixelStereo* sq;
@@ -363,52 +475,53 @@ void SPSegmentationEngine::UpdateBoundaryData()
                 sq = (SuperpixelStereo*)q->superPixel;
 
                 if (q->superPixel != sp) {
-                    BoundaryData& bd = boundaryMap[OrderedPair(sp, sq)];
+                    BInfo& bdpq = sp->boundaryData[sq];
+                    BInfo& bdqp = sq->boundaryData[sp];
                     double sum;
                     int size;
 
                     p.CalcHiSmoothnessSum(directions[dir][2], inliers, sp->plane, sq->plane, sum, size);
-                    bd.bSize += size;
-                    bd.hiSum += sum;
+                    bdpq.length += size;
+                    bdpq.hiSum += sum;
+                    bdqp.length += size;
+                    bdqp.hiSum += sum;
                 }
             }
         }
     }
 
-    for (auto& item : boundaryMap) {
-        SuperpixelStereo* sp = item.first.first;
-        SuperpixelStereo* sq = item.first.second;
+    // parallel
+    for (Superpixel* s : superpixels) {
+        SuperpixelStereo* sp = (SuperpixelStereo*)s;
+        
+        for (auto& bdIter : sp->boundaryData) {
+            BInfo& bInfo = bdIter.second;
+            SuperpixelStereo* sq = bdIter.first;
+            double eSmoCoSum = bInfo.coSum = CalcCoSmoothnessSum(inliers, sp, sq);
+            double eSmoHiSum = bInfo.hiSum;
+            double eSmoOcc = 1; // Phi!?
 
-        double eSmoCoSum = CalcCoSmoothnessSum(inliers, sp, sq);
-        double eSmoHiSum = item.second.hiSum;
-        double eSmoOcc = 1; // Phi!?
+            //double eHi = params.smoWeight*eSmoHiSum / item.second.bSize + params.priorWeight*params.hiPriorWeight;
+            //double eCo = params.smoWeight*eSmoCoSum / (sp->GetSize() + sq->GetSize());
+            //double eOcc = params.smoWeight*eSmoOcc + params.priorWeight*params.occPriorWeight;
+            double eHi = eSmoHiSum / bInfo.length + params.hiPriorWeight;
+            double eCo = eSmoCoSum / (sp->GetSize() + sq->GetSize()); // + 0
+            double eOcc = params.occPriorWeight;
 
-        //double eHi = params.smoWeight*eSmoHiSum / item.second.bSize + params.priorWeight*params.hiPriorWeight;
-        //double eCo = params.smoWeight*eSmoCoSum / (sp->GetSize() + sq->GetSize());
-        //double eOcc = params.smoWeight*eSmoOcc + params.priorWeight*params.occPriorWeight;
-        double eHi = eSmoHiSum / item.second.bSize + params.hiPriorWeight;
-        double eCo = eSmoCoSum / (sp->GetSize() + sq->GetSize()); // + 0
-        double eOcc = params.occPriorWeight;
-
-        auto& bd = sp->boundaryData[sq];
-
-        if (eCo <= eHi && eCo < eOcc) {
-            bd.length = sp->GetSize() + sq->GetSize();
-            bd.type = BTCo;
-            bd.smo = eSmoCoSum;
-            bd.prior = 0;
-        } else if (eHi <= eOcc && eHi <= eCo) {
-            bd.length = item.second.bSize;
-            bd.type = BTHi;
-            bd.smo = eSmoHiSum;
-            bd.prior = params.hiPriorWeight;
-        } else {
-            bd.length = sp->GetSize() + sq->GetSize();
-            bd.type = BTLo;
-            bd.smo = eSmoOcc;
-            bd.prior = params.occPriorWeight;
+            if (eCo <= eHi && eCo < eOcc) {
+                // bInfo.xxx = sp->GetSize() + sq->GetSize();
+                bInfo.type = BTCo;
+                bInfo.typePrior = 0;
+            } else if (eHi <= eOcc && eHi <= eCo) {
+                // bd.xxx = item.second.bSize;
+                bInfo.type = BTHi;
+                bInfo.typePrior = params.hiPriorWeight;
+            } else {
+                //bd.xxx = sp->GetSize() + sq->GetSize();
+                bInfo.type = BTLo;
+                bInfo.typePrior = params.occPriorWeight;
+            }
         }
-        sq->boundaryData[sp] = bd;
     }
 
 }
@@ -620,17 +733,20 @@ const Vec3b& BoundaryColor(Pixel* p, Pixel* q)
 {
     static const Vec3b pixelColors[] = { Vec3b(0, 0, 0), Vec3b(0, 255, 0), Vec3b(255, 0, 0), Vec3b(0, 0, 196), Vec3b(0, 0, 196) };
 
-    if (p == nullptr || q == nullptr) return pixelColors[0];
+    if (p == nullptr || q == nullptr) 
+        return pixelColors[0];
 
     SuperpixelStereo* sp = (SuperpixelStereo*)p->superPixel;
     SuperpixelStereo* sq = (SuperpixelStereo*)q->superPixel;
 
-    if (sp == nullptr || sq == nullptr) return pixelColors[0];
+    if (sp == nullptr || sq == nullptr) 
+        return pixelColors[0];
 
-    auto bd = sp->boundaryData.find(sq);
-    if (bd == sp->boundaryData.end()) return pixelColors[0];
+    auto bdIter = sp->boundaryData.find(sq);
+    if (bdIter == sp->boundaryData.end()) 
+        return pixelColors[0];
     else {
-        if (bd->second.type > 0 || bd->second.type < 5) return pixelColors[bd->second.type];
+        if (bdIter->second.type > 0 || bdIter->second.type < 5) return pixelColors[bdIter->second.type];
         else return pixelColors[0];
     }
 }
@@ -935,8 +1051,9 @@ bool SPSegmentationEngine::TryMovePixelStereo(Pixel* p, Pixel* q, PixelMoveData&
     int spbl, sqbl, sobl;
 
     p->CalcPixelDataStereo(img, depthImg, sp->plane, sq->plane, params.inlierThreshold, params.noDisp, pd);
-    sp->GetRemovePixelDataStereo(pd, pixelsImg, depthImg, inliers, p, q, pcd);
-    sq->GetAddPixelDataStereo(pd, pixelsImg, depthImg, inliers, p, q, qcd);
+    sp->GetRemovePixelDataStereo(pd, pcd);
+    sq->GetAddPixelDataStereo(pd, qcd);
+    CalcBorderChangeDataStereo(pixelsImg, inliers, params, p, q, psd.bDataP, psd.bDataQ);
     CalcSuperpixelBoundaryLength(pixelsImg, p, sp, sq, spbl, sqbl, sobl);
 
     psd.p = p;
@@ -948,11 +1065,12 @@ bool SPSegmentationEngine::TryMovePixelStereo(Pixel* p, Pixel* q, PixelMoveData&
     psd.bLenDelta = sqbl - spbl;
     psd.eDispDelta = spEDisp + sqEDisp - pcd.newEDisp - qcd.newEDisp;
     psd.ePriorDelta = 0;
-    psd.eSmoDelta = spESmo + sqESmo - GetSmoEnergy(pcd.newBoundaryData) - GetSmoEnergy(qcd.newBoundaryData);
+    psd.eSmoDelta = spESmo + sqESmo - GetSmoEnergy(psd.bDataP, sp, psd.pSize, sq, psd.qSize) -
+        GetSmoEnergy(psd.bDataQ, sq, psd.qSize, sp, psd.pSize);
     psd.allowed = true;
     psd.pixelData = pd;
-    psd.bDataP = std::move(pcd.newBoundaryData);
-    psd.bDataQ = std::move(qcd.newBoundaryData);
+    //psd.bDataP =
+    //psd.bDataQ =
     return true;
 }
 

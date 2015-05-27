@@ -4,7 +4,7 @@
 #include "structures.h"
 
 using namespace cv;
-
+using namespace std;
 
 void UpdateFromNode(double& val, const FileNode& node);
 void UpdateFromNode(int& val, const FileNode& node);
@@ -58,6 +58,14 @@ struct SPSegmentationParameters {
 
 static void read(const FileNode& node, SPSegmentationParameters& x, const SPSegmentationParameters& defaultValue = SPSegmentationParameters());
 
+typedef pair<SuperpixelStereo*, SuperpixelStereo*> SPSPair;
+
+
+inline SPSPair OrderedPair(SuperpixelStereo* sp, SuperpixelStereo* sq)
+{
+    return sp < sq ? SPSPair(sp, sq) : SPSPair(sq, sp);
+}
+
 
 class SPSegmentationEngine {
 private:
@@ -90,6 +98,7 @@ private:
     Mat1b inliers;              // boolean matrix of "inliers" (for stereo)
     Matrix<Pixel*> ppImg;       // matrix of dimension of img, pointers to pixelsImg pixels (for stereo)
     vector<Superpixel*> superpixels;
+    //map<SPSPair, BInfo> boundaryData;
 public:
     SPSegmentationEngine(SPSegmentationParameters params, Mat img, Mat depthImg = Mat());
     virtual ~SPSegmentationEngine();
