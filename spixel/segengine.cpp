@@ -460,19 +460,23 @@ void SPSegmentationEngine::UpdateDisparitySums()
 
 void SPSegmentationEngine::UpdateBoundaryData()
 {
-    const int directions[2][3] = { { 0, -1, BLeftFlag }, { -1, 0, BTopFlag } };
+    const int directions[2][3] = { { 0, 1, BLeftFlag }, { 1, 0, BTopFlag } };
+
+    // clear neighbors
+    for (Superpixel* sp : superpixels) {
+        SuperpixelStereo* sps = (SuperpixelStereo*)sp;
+        sps->boundaryData.clear();
+    }
 
     // update length & hiSum (written to smoSum)
     for (Pixel& p : pixelsImg) {
         SuperpixelStereo* sp = (SuperpixelStereo*)p.superPixel;
-        SuperpixelStereo* sq;
-        Pixel* q;
 
         for (int dir = 0; dir < 2; dir++) {
-            q = PixelAt(pixelsImg, p.row + directions[dir][0], p.col + directions[dir][1]);
+            Pixel* q = PixelAt(pixelsImg, p.row + directions[dir][0], p.col + directions[dir][1]);
 
             if (q != nullptr) {
-                sq = (SuperpixelStereo*)q->superPixel;
+                SuperpixelStereo* sq = (SuperpixelStereo*)q->superPixel;
 
                 if (q->superPixel != sp) {
                     BInfo& bdpq = sp->boundaryData[sq];
@@ -490,7 +494,7 @@ void SPSegmentationEngine::UpdateBoundaryData()
         }
     }
 
-    // parallel
+    // parallel?
     for (Superpixel* s : superpixels) {
         SuperpixelStereo* sp = (SuperpixelStereo*)s;
         
@@ -509,15 +513,12 @@ void SPSegmentationEngine::UpdateBoundaryData()
             double eOcc = params.occPriorWeight;
 
             if (eCo <= eHi && eCo < eOcc) {
-                // bInfo.xxx = sp->GetSize() + sq->GetSize();
                 bInfo.type = BTCo;
                 bInfo.typePrior = 0;
             } else if (eHi <= eOcc && eHi <= eCo) {
-                // bd.xxx = item.second.bSize;
                 bInfo.type = BTHi;
                 bInfo.typePrior = params.hiPriorWeight;
             } else {
-                //bd.xxx = sp->GetSize() + sq->GetSize();
                 bInfo.type = BTLo;
                 bInfo.typePrior = params.occPriorWeight;
             }
