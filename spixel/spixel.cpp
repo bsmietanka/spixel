@@ -243,7 +243,7 @@ int _tmain(int argc, char* argv[])
 {
     // test();
     //_CrtSetBreakAlloc(298);
-    srand(1);
+    //srand(1);
     if (argc == 4) {
         ProcessFiles(argv[1], argv[2], argv[3], "");
     } else if (argc == 5) {

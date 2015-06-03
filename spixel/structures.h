@@ -17,18 +17,17 @@ typedef std::int16_t sint;
 typedef std::uint8_t byte;
 typedef cv::Point3d Plane_d;
 
-const double eps = 1.0E-6;
-
-
 // Constants
 //////////////
+
+const double eps = 1.0E-6;
+const Plane_d zeroPlane = Plane_d(0.0, 0.0, 0.0);
 
 // Border (boundary) types (hinge, coplanarity, etc.)
 const int BTCo = 1;
 const int BTHi = 2;
 const int BTLo = 3;
 const int BTRo = 4;
-
 
 // Border position flags
 const byte BLeftFlag = 1;

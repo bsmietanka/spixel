@@ -32,6 +32,8 @@ struct SPSegmentationParameters {
     int maxLevels = 10;
 
     bool stereo = false;
+    bool inpaint = false;           // use opencv's inpaint method to fill gaps in
+                                    // disparity image
 
     void read(const FileNode& node)
     {
@@ -48,6 +50,7 @@ struct SPSegmentationParameters {
         UpdateFromNode(hiPriorWeight, node["hiPriorWeight"]);
         UpdateFromNode(noDisp, node["noDisp"]);
         UpdateFromNode(stereo, node["stereo"]);
+        UpdateFromNode(inpaint, node["inpaint"]);
         UpdateFromNode(iterations, node["iterations"]);
         UpdateFromNode(reSteps, node["reSteps"]);
         UpdateFromNode(inlierThreshold, node["inlierThreshold"]);
@@ -76,6 +79,7 @@ private:
         vector<double> levelTimes;
         vector<int> levelIterations;
         double total = 0.0;
+        vector<double> levelMaxEDelta;
     };
 
     PerformanceInfo performanceInfo;
@@ -123,7 +127,7 @@ private:
     void InitializeStereoEnergies();
     void InitializePPImage();
     void UpdatePPImage();
-    int IterateMoves();
+    int IterateMoves(int level);
     void ReEstimatePlaneParameters();
     void EstimatePlaneParameters();
     bool SplitPixels();

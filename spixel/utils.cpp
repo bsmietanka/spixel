@@ -126,26 +126,18 @@ Mat ConvertRGBToLab(const Mat& img)
     return result;
 }
 
-/*
-cv::Mat InterpolateDisparityImage(const cv::Mat& img)
+cv::Mat InpaintDisparityImage(const cv::Mat& img)
 {
-    if (img.type() != CV_16UC1)
-        throw std::exception("Depth image is not unsigned 16 bit image");
-
-    double min, max;
     cv::Mat1b toInpaint, inpainted;
+    cv::Mat1d result;
 
-    cv::minMaxLoc(img, &min, &max);
-    img.convertTo(toInpaint, CV_8UC1, 255.0 / max);
+    img.convertTo(toInpaint, CV_8UC1);
     cv::inpaint(toInpaint, (toInpaint == 0), inpainted, 5.0, cv::INPAINT_TELEA);
-
-    cv::imwrite("c:\\tmp\\inp.png", inpainted);
-    //cv::Mat1w result = cv::Mat1w(img.rows, img.cols);
-
-
-    return inpainted;
+    //cv::imwrite("c:\\tmp\\inp.png", inpainted);
+    inpainted.convertTo(result, CV_64FC1);
+    return result;
 }
-*/
+
 
 
 // Fills pixel with zero value with min of its neighbors in

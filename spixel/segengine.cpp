@@ -30,7 +30,7 @@ double TotalEnergyDelta(const SPSegmentationParameters& params, PixelMoveData* p
 void UpdateHingeBoundaryData(const Pixel* r, byte sideFlag, const Pixel* sideP, SuperpixelStereo* sp, SuperpixelStereo* sq,
     const cv::Mat1b& inliers,
     BorderDataMap& bcdp, BorderDataMap& bcdq,
-    unordered_set<SuperpixelStereo*> nbsps)
+    unordered_set<SuperpixelStereo*>& nbsps)
 {
     if (r == nullptr || sideP == nullptr) return;
 
@@ -41,10 +41,12 @@ void UpdateHingeBoundaryData(const Pixel* r, byte sideFlag, const Pixel* sideP, 
     sideP->CalcHiSmoothnessSum(sideFlag, inliers, sp->plane, sq->plane, sum, count);
 
     if (sr == sp) {
-        bcdp[sq].hiSum += sum;
-        bcdp[sq].length += count;
-        bcdq[sp].hiSum += sum;
-        bcdq[sp].length += count;
+        BInfo& bip = bcdp[sq];
+        bip.hiSum += sum;
+        bip.length += count;
+        BInfo& biq = bcdq[sp];
+        biq.hiSum += sum;
+        biq.length += count;
     } else if (sr == sq) {
         bcdp[sq].hiSum -= sum;
         bcdp[sq].length -= count;
@@ -209,7 +211,11 @@ SPSegmentationEngine::SPSegmentationEngine(SPSegmentationParameters params, Mat 
 {
     img = ConvertRGBToLab(im);
     depthImg = AdjustDisparityImage(depthIm);
-    depthImgAdj = FillGapsInDisparityImage(depthImg);
+    if (params.stereo) {
+        if (params.inpaint) depthImgAdj = InpaintDisparityImage(depthImg);
+        else depthImgAdj = FillGapsInDisparityImage(depthImg);
+    }
+    //depthImg = FillGapsInDisparityImage(depthImg);
     inliers = Mat1b(depthImg.rows, depthImg.cols);
 }
 
@@ -324,19 +330,21 @@ void SPSegmentationEngine::ProcessImage()
 
     Timer t1;
     bool splitted;
+    int level = 0;
 
     do {
         Timer t2;
 
         performanceInfo.levelIterations.push_back(0);
         for (int iteration = 0; iteration < params.iterations; iteration++) {
-            int iters = IterateMoves();
+            int iters = IterateMoves(level);
             if (iters > performanceInfo.levelIterations.back())
                 performanceInfo.levelIterations.back() = iters;
         }
         splitted = SplitPixels();
         t2.Stop();
         performanceInfo.levelTimes.push_back(t2.GetTimeInSec());
+        level++;
     } while (splitted);
 
     t0.Stop();
@@ -357,28 +365,28 @@ void SPSegmentationEngine::ProcessImageStereo()
 
     Timer t1;
     bool splitted;
-    int levelCount = 0;
+    int level = 0;
 
-    imwrite("c:\\tmp\\a--.png", this->GetSegmentedImage());
+    //imwrite("c:\\tmp\\a--.png", this->GetSegmentedImage());
 
     do {
         Timer t2;
         performanceInfo.levelIterations.push_back(0);
         for (int iteration = 0; iteration < params.iterations; iteration++) {
-            int iters = IterateMoves();
+            int iters = IterateMoves(level);
 
-            stringstream ss;
-            ss << levelCount;
-            imwrite("c:\\tmp\\a-" + ss.str() + ".png", this->GetSegmentedImage());
+            //stringstream ss;
+            //ss << levelCount;
+            //imwrite("c:\\tmp\\a-" + ss.str() + ".png", this->GetSegmentedImage());
             if (iters > performanceInfo.levelIterations.back())
                 performanceInfo.levelIterations.back() = iters;
             ReEstimatePlaneParameters();
         }
         splitted = SplitPixels();
-        levelCount++;
+        level++;
         t2.Stop();
         performanceInfo.levelTimes.push_back(t2.GetTimeInSec());
-    } while (splitted && levelCount < params.maxLevels);
+    } while (splitted && level < params.maxLevels);
 
     t0.Stop();
     t1.Stop();
@@ -403,7 +411,7 @@ void SPSegmentationEngine::UpdatePlaneParameters()
 
         for (auto& bd : sp->boundaryData) {
             SuperpixelStereo* sq = (SuperpixelStereo*)bd.first;
-            if (bd.second.type == BTCo && sp < bd.first) {
+            if (bd.second.type == BTCo /* && sp < bd.first */) {
                 sp->CalcPlaneLeastSquares(sq, depthImg);
                 updated = true;
             }
@@ -429,9 +437,10 @@ void SPSegmentationEngine::EstimatePlaneParameters()
 {
     Timer t;
 
-    //#pragma omp parallel for
+    #pragma omp parallel for
     for (int i = 0; i < superpixels.size(); i++) {
         SuperpixelStereo* sp = (SuperpixelStereo*)superpixels[i];
+        //InitSuperpixelPlane(sp, depthImg);
         InitSuperpixelPlane(sp, depthImgAdj);
     }
     t.Stop();
@@ -494,7 +503,7 @@ void SPSegmentationEngine::UpdateBoundaryData()
         }
     }
 
-    // parallel?
+    //#pragma omp parallel
     for (Superpixel* s : superpixels) {
         SuperpixelStereo* sp = (SuperpixelStereo*)s;
         
@@ -609,7 +618,7 @@ bool SPSegmentationEngine::SplitPixels()
 }
 
 // Returns number of iterations
-int SPSegmentationEngine::IterateMoves()
+int SPSegmentationEngine::IterateMoves(int level)
 {
     // tuple: (p, q), p, q are neighboring Pixels
     // We move pixel p to superpixel q->superPixel
@@ -636,6 +645,11 @@ int SPSegmentationEngine::IterateMoves()
     PixelMoveData tryMoveData[4];
     Superpixel* nbsp[5];
     int nbspSize;
+
+    if (performanceInfo.levelMaxEDelta.size() <= level) {
+        performanceInfo.levelMaxEDelta.resize(level + 1);
+        performanceInfo.levelMaxEDelta[level] = 0;
+    }
 
     while (!list.Empty() && count < params.maxUpdates) {
         Pixel*& p = list.Front();
@@ -668,7 +682,6 @@ int SPSegmentationEngine::IterateMoves()
 
         if (bestMoveData != nullptr) {
             if (params.stereo) {
-                MovePixelStereo(pixelsImg, *bestMoveData);
                 //SuperpixelStereo* sps = (SuperpixelStereo*)(bestMoveData->p->superPixel);
                 //double calc = sps->CalcDispEnergy(depthImg, params.inlierThreshold, params.noDisp);
                 //if (fabs(calc - sps->GetDispSum()) > 0.01) {
@@ -676,6 +689,14 @@ int SPSegmentationEngine::IterateMoves()
                 //}
                 //sps->CheckRegEnergy();
                 //sps->CheckAppEnergy(img);
+
+                double delta = TotalEnergyDelta(params, bestMoveData);
+
+                if (performanceInfo.levelMaxEDelta[level] < delta)
+                    performanceInfo.levelMaxEDelta[level] = delta;
+
+                MovePixelStereo(pixelsImg, *bestMoveData);
+
             } else {
                 MovePixel(pixelsImg, *bestMoveData);
             }
@@ -929,6 +950,10 @@ void SPSegmentationEngine::PrintPerformanceInfo()
     cout << "Total time: " << performanceInfo.total << " sec." << endl;
     cout << "Times for each level (in sec.): ";
     for (double& t : performanceInfo.levelTimes)
+        cout << t << ' ';
+    cout << endl;
+    cout << "Max energy deltaa for each level: ";
+    for (double& t : performanceInfo.levelMaxEDelta)
         cout << t << ' ';
     cout << endl;
     for (int& c : performanceInfo.levelIterations)

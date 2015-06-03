@@ -22,6 +22,8 @@ cv::Mat AdjustDisparityImage(const cv::Mat& img);
 
 cv::Mat FillGapsInDisparityImage(const cv::Mat& img);
 
+cv::Mat InpaintDisparityImage(const cv::Mat& img);
+
 struct StatData {
     double mean, var, min, max;
 };

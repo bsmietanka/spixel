@@ -320,7 +320,8 @@ bool IsSuperpixelRegionConnectedOptimized(const Matrix<Pixel>& pixelsImg, Pixel*
 bool Plane3P(const cv::Point3d& p1, const cv::Point3d& p2, const cv::Point3d& p3, Plane_d& plane)
 {
     cv::Point3d normal = (p1 - p2).cross(p1 - p3);
-    if (normal.z < eps && -normal.z < eps) return false;
+    if (normal.z < eps && -normal.z < eps) 
+        return false;
     else {
         plane.x = -normal.x/normal.z;
         plane.y = -normal.y/normal.z;
@@ -404,6 +405,10 @@ bool RANSACPlane(const vector<cv::Point3d>& pixels, Plane_d& plane)
 // Should be thread-safe!
 void InitSuperpixelPlane(SuperpixelStereo* sp, const cv::Mat1d& depthImg)
 {
+    // We do not re-initialize the plane!
+    if (sp->plane != zeroPlane)
+        return;
+
     vector<cv::Point3d> pixels;
 
     pixels.reserve(sp->GetSize());
@@ -417,7 +422,7 @@ void InitSuperpixelPlane(SuperpixelStereo* sp, const cv::Mat1d& depthImg)
     });
 
     if (!RANSACPlane(pixels, sp->plane)) {
-        sp->plane = Plane_d(0, 0, 1.0);
+        sp->plane = Plane_d(0, 0, 0);
     } else {
         // Least squares re-estimation
 
@@ -500,6 +505,7 @@ void LeastSquaresPlane(int sumIRow, int sumIRow2, int sumICol, int sumICol2, int
         plane.y = result(1, 0);
         plane.z = result(2, 0);
     } else {
+
         // leave as it is... plane.x = plane.y = plane.z = 0.0;
     }
 }
