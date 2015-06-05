@@ -47,7 +47,6 @@ struct BInfo {
     double hiSum = 0.0;         // Smo value (sum) for hinge
 };
 
-
 // Functions
 //////////////
 
@@ -443,6 +442,7 @@ struct Pixel { // : public custom_alloc {
 
 class Superpixel {
 public:
+    int id;                                 // id (index) of superpixel
     int borderLength = 0;                   // length of border (in img pixels)
     double sumRow = 0, sumCol = 0;          // sum of row, column indices
     double sumRow2 = 0, sumCol2 = 0;        // sum or row, column squares of indices
@@ -455,7 +455,7 @@ public:
     int numP = 0;
 
 public:
-    Superpixel() { }
+    Superpixel(int _id) : id(_id) { }
     virtual ~Superpixel() { }
 
     // Same as AddPixel below, but energy is not caclulated and must be initialized separately.
@@ -609,7 +609,7 @@ public:
     BorderDataMap boundaryData;
     Plane_d plane;
 
-    SuperpixelStereo() : Superpixel() { }
+    SuperpixelStereo(int _id) : Superpixel(_id) { }
     virtual ~SuperpixelStereo() { }
 
     void AddPixelInit(PixelData& pd) override

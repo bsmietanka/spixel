@@ -48,15 +48,19 @@ void UpdateHingeBoundaryData(const Pixel* r, byte sideFlag, const Pixel* sideP, 
         biq.hiSum += sum;
         biq.length += count;
     } else if (sr == sq) {
-        bcdp[sq].hiSum -= sum;
-        bcdp[sq].length -= count;
-        bcdq[sp].hiSum -= sum;
-        bcdq[sp].length -= count;
+        BInfo& bip = bcdp[sq];
+        bip.hiSum -= sum;
+        bip.length -= count;
+        BInfo& biq = bcdq[sp];
+        biq.hiSum -= sum;
+        biq.length -= count;
     } else {
-        bcdp[sr].hiSum -= sum;
-        bcdp[sr].length -= count;
-        bcdq[sr].hiSum += sum;
-        bcdq[sr].length += count;
+        BInfo& bip = bcdp[sr];
+        bip.hiSum -= sum;
+        bip.length -= count;
+        BInfo& biq = bcdq[sr];
+        biq.hiSum += sum;
+        biq.length += count;
         nbsps.insert(sr);
     }
 }
@@ -224,7 +228,7 @@ SPSegmentationEngine::~SPSegmentationEngine()
     Reset();
 }
 
-void SPSegmentationEngine::Initialize(Superpixel* spGenerator())
+void SPSegmentationEngine::Initialize(Superpixel* spGenerator(int))
 {
     int pixelSize = params.pixelSize;
     int imgPixelsRows = img.rows / pixelSize + (img.rows % pixelSize == 0 ? 0 : 1);
@@ -248,6 +252,7 @@ void SPSegmentationEngine::Initialize(Superpixel* spGenerator())
     int imgSPixelsRows = imgPixelsRows / sPixelSize + (imgPixelsRows % sPixelSize == 0 ? 0 : 1);
     int imgSPixelsCols = imgPixelsCols / sPixelSize + (imgPixelsCols % sPixelSize == 0 ? 0 : 1);
     PixelData pd;
+    int superPixelIdCount = 0;
 
     superpixels.clear();
     superpixels.reserve(imgSPixelsCols*imgSPixelsRows);
@@ -257,7 +262,7 @@ void SPSegmentationEngine::Initialize(Superpixel* spGenerator())
             int j0 = pj*sPixelSize;
             int i1 = min(i0 + sPixelSize, pixelsImg.rows);
             int j1 = min(j0 + sPixelSize, pixelsImg.cols);
-            Superpixel* sp = spGenerator(); // Superpixel();
+            Superpixel* sp = spGenerator(superPixelIdCount++); // Superpixel();
 
             // Update superpixels pointers in each pixel
             for (int i = i0; i < i1; i++) {
@@ -290,7 +295,7 @@ void SPSegmentationEngine::Initialize(Superpixel* spGenerator())
 
 void SPSegmentationEngine::InitializeStereo()
 {
-    Initialize([]() -> Superpixel* { return new SuperpixelStereo(); });
+    Initialize([](int id) -> Superpixel* { return new SuperpixelStereo(id); });
     InitializePPImage();
     EstimatePlaneParameters();
     InitializeStereoEnergies();
@@ -322,7 +327,7 @@ void SPSegmentationEngine::ProcessImage()
 {
     Timer t0;
 
-    Initialize([]() { return new Superpixel(); });
+    Initialize([](int id) { return new Superpixel(id); });
 
     t0.Stop();
     performanceInfo.init = t0.GetTimeInSec();

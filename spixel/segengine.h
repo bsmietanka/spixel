@@ -69,6 +69,37 @@ inline SPSPair OrderedPair(SuperpixelStereo* sp, SuperpixelStereo* sq)
     return sp < sq ? SPSPair(sp, sq) : SPSPair(sq, sp);
 }
 
+class BInfoMatrix  {
+private:
+    BInfo** data;
+    int rows;
+    int cols;
+public:
+    BInfoMatrix() : data(nullptr), rows(0), cols(0) { }
+    ~BInfoMatrix() { Release(); }
+
+    void Resize(int _rows, int _cols)
+    {
+        Release();
+        rows = _rows;
+        cols = _cols;
+        data = new BInfo*[rows*cols];
+        memset(data, 0, sizeof(BInfo*)*rows*cols);
+    }
+
+    BInfo& operator ()(int r, int c) { return *(*data + r*cols + c); }
+
+private:
+    void Release()
+    {
+        if (data != nullptr) {
+            BInfo* end = *data + rows*cols, *p = *data;
+            for (; p != end; p++) { if (p != nullptr) delete p; }
+            delete[] data;
+        }
+    }
+};
+
 
 class SPSegmentationEngine {
 private:
@@ -122,7 +153,7 @@ public:
     int GetNoOfSuperpixels() const;
     double ProcessingTime() { return performanceInfo.total; }
 private:
-    void Initialize(Superpixel* spGenerator());
+    void Initialize(Superpixel* spGenerator(int));
     void InitializeStereo();
     void InitializeStereoEnergies();
     void InitializePPImage();
