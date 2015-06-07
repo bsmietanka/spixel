@@ -145,6 +145,46 @@ template <typename T> struct Matrix {
 
 };
 
+// BInfoMatrix (Matrix used to hold BInfo data, consider using Matrix<BInfo*> instead
+////////////////////////////////////////////////////////////////////////////////////////
+
+class BInfoMatrix  {
+private:
+    BInfo** data;
+    int dim;
+public:
+    BInfoMatrix() : data(nullptr), dim(0) { }
+    ~BInfoMatrix() { Release(); }
+
+    void Resize(int _dim)
+    {
+        Release();
+        dim = _dim;
+        data = new BInfo*[dim*dim];
+        memset(data, 0, dim*dim*sizeof(BInfo*));
+    }
+
+    BInfo*& operator ()(int r, int c) { return c >= r ? *(data + r*dim + c) : *(data + c*dim + r); }
+    BInfo*& operator ()(int r, int c) const { return c >= r ? *(data + r*dim + c) : *(data + c*dim + r); }
+    BInfo*& get(int r, int c)
+    {
+        BInfo*& p = (*this)(r, c);
+        if (p == nullptr) p = new BInfo();
+        return p;
+    }
+
+private:
+    void Release()
+    {
+        if (data != nullptr) {
+            BInfo** end = data + dim*dim, **p = data;
+            for (; p != end; p++) { if (*p != nullptr) delete *p; }
+            delete[] data;
+        }
+    }
+};
+
+
 
 // Pixel/Superpixel
 /////////////////////
@@ -184,6 +224,7 @@ struct PixelMoveData {
     int qSize;          // superpixel of q size
     PixelData pixelData;
     BorderDataMap bDataP, bDataQ;
+    vector<SuperpixelStereo*> nbRemoveP, nbAddQ;
 };
 
 struct PixelChangeData {
@@ -228,9 +269,6 @@ struct Pixel { // : public custom_alloc {
             for (int j = ulc; j < (int)lrc; j++) {
                 sumRow += i; sumCol += j;
                 sumRow2 += i*i; sumCol2 += j*j;
-                if (sumCol2 < 0) {
-                    exit(0);
-                }
             }
         }
     }
@@ -602,11 +640,8 @@ public:
     double sumID = 0.0;
     int nI = 0;
 
-    //double sumIRow = 0.0;
-
-
     unordered_set<Pixel*> pixels;
-    BorderDataMap boundaryData;
+    vector<SuperpixelStereo*> neighbors;
     Plane_d plane;
 
     SuperpixelStereo(int _id) : Superpixel(_id) { }
@@ -637,25 +672,25 @@ public:
         return sumDisp;
     }
 
-    double GetPriorEnergy() const
+    double GetPriorEnergy(const BInfoMatrix& bim) const
     {
         double result = 0.0;
 
-        for (auto pair : boundaryData) {
-            result += pair.second.typePrior;
+        for (SuperpixelStereo* nb : neighbors) {
+            result += bim(id, nb->id)->typePrior;
         }
         return result;
     }
 
-    double GetSmoEnergy()
+    double GetSmoEnergy(const BInfoMatrix& bim)
     {
         double result = 0.0;
 
-        for (auto& bdItem : boundaryData) {
-            const BInfo& bInfo = bdItem.second;
-            if (bInfo.length > 0) {
-                if (bInfo.type == BTCo) result += bInfo.coSum / (size + bdItem.first->size);
-                else if (bInfo.type == BTHi) result += bInfo.coSum / bInfo.length;
+        for (SuperpixelStereo* nb : neighbors) {
+            BInfo* bInfo = bim(id, nb->id);
+            if (bInfo->length > 0) {
+                if (bInfo->type == BTCo) result += bInfo->coSum / (size + nb->size);
+                else if (bInfo->type == BTHi) result += bInfo->coSum / bInfo->length;
             }
         }
         return result;

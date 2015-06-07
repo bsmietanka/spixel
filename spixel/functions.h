@@ -65,7 +65,7 @@ private:
 
 // See definition for description
 void MovePixel(Matrix<Pixel>& pixelsImg, PixelMoveData& pmd);
-void MovePixelStereo(Matrix<Pixel>& pixelsImg, PixelMoveData& pmd);
+void MovePixelStereo(Matrix<Pixel>& pixelsImg, BInfoMatrix& bim, PixelMoveData& pmd);
 
 // Return true if superpixel sp is connected in region defined by upper left/lower right corners of pixelsImg
 bool IsSuperpixelRegionConnected(const Matrix<Pixel>& pixelsImg, Pixel* p, int ulr, int ulc, int lrr, int lrc);

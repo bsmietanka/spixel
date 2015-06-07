@@ -17,8 +17,8 @@ public:
 
     void GetNDistinct(int n, int result[])
     {
-        int N = v.size();
-        for (int k = 0; k < n; k++) {
+        size_t N = v.size();
+        for (size_t k = 0; k < n; k++) {
             int l = rand() % N;
             result[k] = v[l];
             std::swap(v[l], v[--N]);
@@ -240,7 +240,16 @@ void MovePixel(Matrix<Pixel>& pixelsImg, PixelMoveData& pmd)
 
 }
 
-void MovePixelStereo(Matrix<Pixel>& pixelsImg, PixelMoveData& pmd)
+void UpdateBoundaryInfo(const BorderDataMap& bdm, SuperpixelStereo* sp, BInfoMatrix& bim)
+{
+    sp->neighbors.clear();
+    for (auto bdIter : bdm) {
+        sp->neighbors.push_back(bdIter.first);
+        *bim.get(sp->id, bdIter.first->id) = bdIter.second;
+    }
+}
+
+void MovePixelStereo(Matrix<Pixel>& pixelsImg, BInfoMatrix& bim, PixelMoveData& pmd)
 {
     MovePixel(pixelsImg, pmd);
 
@@ -248,17 +257,22 @@ void MovePixelStereo(Matrix<Pixel>& pixelsImg, PixelMoveData& pmd)
     SuperpixelStereo* sq = (SuperpixelStereo*)pmd.q->superPixel;
 
     // Update boundary
-    sp->boundaryData = std::move(pmd.bDataP);
-    sq->boundaryData = std::move(pmd.bDataQ);
+    UpdateBoundaryInfo(pmd.bDataP, sp, bim);
+    UpdateBoundaryInfo(pmd.bDataQ, sq, bim);
 
-    // Update neighboring boundaries
-    for (auto& bdIter : sp->boundaryData) {
-        if (bdIter.first != sq) bdIter.first->boundaryData[sp] = bdIter.second;
-    }
-    for (auto& bdIter : sq->boundaryData) {
-        if (bdIter.first != sp) bdIter.first->boundaryData[sq] = bdIter.second;
+    // Remove neighbors p (if any)
+    for (SuperpixelStereo* sr : pmd.nbRemoveP) {
+        sp->neighbors.erase(remove(sp->neighbors.begin(), sp->neighbors.end(), sr),
+            sp->neighbors.end());
+        sr->neighbors.erase(remove(sr->neighbors.begin(), sr->neighbors.end(), sp),
+            sr->neighbors.end());
     }
 
+    // Add neighbors to q (if any)
+    for (SuperpixelStereo* sr : pmd.nbAddQ) {
+        sq->neighbors.push_back(sr);
+        sr->neighbors.push_back(sq);
+    }
 }
 
 // Return true if superpixel sp is connected in region defined by upper left/lower right corners of pixelsImg

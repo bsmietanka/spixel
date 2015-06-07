@@ -84,8 +84,17 @@ void EstimateBorderType(const SPSegmentationParameters& params, SuperpixelStereo
     }
 }
 
-void CalcBorderChangeDataStereo(const Matrix<Pixel>& pixelsImg, const cv::Mat1b& inliers, 
-    const SPSegmentationParameters& params, Pixel* p, Pixel* q, BorderDataMap& bcdp, BorderDataMap& bcdq)
+void CopyBoundaryInfo(const BInfoMatrix& bim, SuperpixelStereo* sp, BorderDataMap& bdm)
+{
+    bdm.clear();
+    for (SuperpixelStereo* sq : sp->neighbors) {
+        BInfo* bInfo = bim(sp->id, sq->id);
+        bdm.insert(pair<SuperpixelStereo*, BInfo>(sq, *bInfo));
+    }
+}
+
+void CalcBorderChangeDataStereo(const Matrix<Pixel>& pixelsImg, const cv::Mat1b& inliers, const BInfoMatrix& bim, 
+    const SPSegmentationParameters& params, Pixel* p, Pixel* q, PixelMoveData& psd)
 {
     // Move p from sp -> sq
     SuperpixelStereo* sp = (SuperpixelStereo*)p->superPixel;
@@ -93,51 +102,50 @@ void CalcBorderChangeDataStereo(const Matrix<Pixel>& pixelsImg, const cv::Mat1b&
     const Pixel* r;
     unordered_set<SuperpixelStereo*> nbsps;    // Neighbors of p (other than sp and sq), make something more lightwight
 
-    // Make copy
-    bcdp = sp->boundaryData;
-    bcdq = sq->boundaryData;
+    // Fill maps
+    CopyBoundaryInfo(bim, sp, psd.bDataP);
+    CopyBoundaryInfo(bim, sq, psd.bDataQ);
 
     // Update hinge sums for neighbors of p
     r = PixelAt(pixelsImg, p->row, p->col + 1);
-    UpdateHingeBoundaryData(r, BLeftFlag, r, sp, sq, inliers, bcdp, bcdq, nbsps);
+    UpdateHingeBoundaryData(r, BLeftFlag, r, sp, sq, inliers, psd.bDataP, psd.bDataQ, nbsps);
     r = PixelAt(pixelsImg, p->row, p->col - 1);
-    UpdateHingeBoundaryData(r, BLeftFlag, p, sp, sq, inliers, bcdp, bcdq, nbsps);
+    UpdateHingeBoundaryData(r, BLeftFlag, p, sp, sq, inliers, psd.bDataP, psd.bDataQ, nbsps);
     r = PixelAt(pixelsImg, p->row + 1, p->col);
-    UpdateHingeBoundaryData(r, BTopFlag, r, sp, sq, inliers, bcdp, bcdq, nbsps);
+    UpdateHingeBoundaryData(r, BTopFlag, r, sp, sq, inliers, psd.bDataP, psd.bDataQ, nbsps);
     r = PixelAt(pixelsImg, p->row - 1, p->col);
-    UpdateHingeBoundaryData(r, BTopFlag, p, sp, sq, inliers, bcdp, bcdq, nbsps);
+    UpdateHingeBoundaryData(r, BTopFlag, p, sp, sq, inliers, psd.bDataP, psd.bDataQ, nbsps);
 
     // Update coplanarity sums for neighbors of sp and sq
-    for (auto& bdIter : sp->boundaryData) {
-        SuperpixelStereo* sr = bdIter.first;
-        bcdp[sr].coSum -= p->CalcCoSmoothnessSum(inliers, sp->plane, sr->plane);
+    for (SuperpixelStereo* sr : sp->neighbors) {
+        psd.bDataP[sr].coSum -= p->CalcCoSmoothnessSum(inliers, sp->plane, sr->plane);
     }
-    for (auto& bdIter : sq->boundaryData) {
-        SuperpixelStereo* sr = bdIter.first;
-        bcdp[sr].coSum += p->CalcCoSmoothnessSum(inliers, sp->plane, sr->plane);
+    for (SuperpixelStereo* sr : sq->neighbors) {
+        psd.bDataP[sr].coSum += p->CalcCoSmoothnessSum(inliers, sp->plane, sr->plane);
         nbsps.erase(sr);
     }
 
     // Eventual new neighbor(s) of sq
+    psd.nbAddQ.clear();
     for (SuperpixelStereo* snew : nbsps) {
-        bcdq[snew].coSum = CalcCoSmoothnessSum(inliers, sq, snew);
+        psd.bDataQ[snew].coSum = CalcCoSmoothnessSum(inliers, sq, snew);
+        psd.nbAddQ.push_back(snew);
     }
-
-    nbsps.clear();
 
     // Remove "neighbors" of sp with length 0
-    for (auto& bdIter : bcdp) {
-        if (bdIter.second.length <= 0) nbsps.insert(bdIter.first);
+    psd.nbRemoveP.clear();
+    for (auto& bdIter : psd.bDataP) {
+        if (bdIter.second.length <= 0) psd.nbRemoveP.push_back(bdIter.first);
     }
-    for (SuperpixelStereo* sr : nbsps) {
-        bcdp.erase(sr);
+    for (SuperpixelStereo* sr : psd.nbRemoveP) {
+        psd.bDataP.erase(sr);
     }
 
     // Estimate type for each neighbor
-    for (auto& bdIter : bcdp) {
+    for (auto& bdIter : psd.bDataP) {
         EstimateBorderType(params, sp, sp->GetSize() - p->GetSize(), bdIter.first, bdIter.first->GetSize() + ((bdIter.first == sq) ? p->GetSize() : 0), bdIter.second);
     }
-    for (auto& bdIter : bcdq) {
+    for (auto& bdIter : psd.bDataQ) {
         EstimateBorderType(params, sq, sq->GetSize() + p->GetSize(), bdIter.first, bdIter.first->GetSize() - ((bdIter.first == sp) ? p->GetSize() : 0), bdIter.second);
     }
 
@@ -296,6 +304,7 @@ void SPSegmentationEngine::Initialize(Superpixel* spGenerator(int))
 void SPSegmentationEngine::InitializeStereo()
 {
     Initialize([](int id) -> Superpixel* { return new SuperpixelStereo(id); });
+    boundaryInfo.Resize(superpixels.size());
     InitializePPImage();
     EstimatePlaneParameters();
     InitializeStereoEnergies();
@@ -408,15 +417,16 @@ void SPSegmentationEngine::ReEstimatePlaneParameters()
     UpdateDisparitySums();
 }
 
+// Called when re-estimating planes
 void SPSegmentationEngine::UpdatePlaneParameters()
 {
     for (int i = 0; i < superpixels.size(); i++) {
         SuperpixelStereo* sp = (SuperpixelStereo*)superpixels[i];
         bool updated = false;
 
-        for (auto& bd : sp->boundaryData) {
-            SuperpixelStereo* sq = (SuperpixelStereo*)bd.first;
-            if (bd.second.type == BTCo /* && sp < bd.first */) {
+        for (SuperpixelStereo* sq : sp->neighbors) {
+            BInfo* bInfo = boundaryInfo(sp->id, sq->id);
+            if (bInfo->type == BTCo /* && sp < bd.first */) {
                 sp->CalcPlaneLeastSquares(sq, depthImg);
                 updated = true;
             }
@@ -472,6 +482,7 @@ void SPSegmentationEngine::UpdateDisparitySums()
     }
 }
 
+// Called when re-estimating planes and in the initialization
 void SPSegmentationEngine::UpdateBoundaryData()
 {
     const int directions[2][3] = { { 0, 1, BLeftFlag }, { 1, 0, BTopFlag } };
@@ -479,7 +490,7 @@ void SPSegmentationEngine::UpdateBoundaryData()
     // clear neighbors
     for (Superpixel* sp : superpixels) {
         SuperpixelStereo* sps = (SuperpixelStereo*)sp;
-        sps->boundaryData.clear();
+        sps->neighbors.clear();
     }
 
     // update length & hiSum (written to smoSum)
@@ -492,17 +503,14 @@ void SPSegmentationEngine::UpdateBoundaryData()
             if (q != nullptr) {
                 SuperpixelStereo* sq = (SuperpixelStereo*)q->superPixel;
 
-                if (q->superPixel != sp) {
-                    BInfo& bdpq = sp->boundaryData[sq];
-                    BInfo& bdqp = sq->boundaryData[sp];
+                if (sp->id != sq->id) {
+                    BInfo* bdpq = boundaryInfo.get(sp->id, sq->id);
                     double sum;
                     int size;
 
                     p.CalcHiSmoothnessSum(directions[dir][2], inliers, sp->plane, sq->plane, sum, size);
-                    bdpq.length += size;
-                    bdpq.hiSum += sum;
-                    bdqp.length += size;
-                    bdqp.hiSum += sum;
+                    bdpq->length += size;
+                    bdpq->hiSum += sum;
                 }
             }
         }
@@ -512,29 +520,28 @@ void SPSegmentationEngine::UpdateBoundaryData()
     for (Superpixel* s : superpixels) {
         SuperpixelStereo* sp = (SuperpixelStereo*)s;
         
-        for (auto& bdIter : sp->boundaryData) {
-            BInfo& bInfo = bdIter.second;
-            SuperpixelStereo* sq = bdIter.first;
-            double eSmoCoSum = bInfo.coSum = CalcCoSmoothnessSum(inliers, sp, sq);
-            double eSmoHiSum = bInfo.hiSum;
+        for (SuperpixelStereo* sq : sp->neighbors) {
+            BInfo* bInfo = boundaryInfo(sp->id, sq->id);
+            double eSmoCoSum = bInfo->coSum = CalcCoSmoothnessSum(inliers, sp, sq);
+            double eSmoHiSum = bInfo->hiSum;
             double eSmoOcc = 1; // Phi!?
 
             //double eHi = params.smoWeight*eSmoHiSum / item.second.bSize + params.priorWeight*params.hiPriorWeight;
             //double eCo = params.smoWeight*eSmoCoSum / (sp->GetSize() + sq->GetSize());
             //double eOcc = params.smoWeight*eSmoOcc + params.priorWeight*params.occPriorWeight;
-            double eHi = eSmoHiSum / bInfo.length + params.hiPriorWeight;
+            double eHi = eSmoHiSum / bInfo->length + params.hiPriorWeight;
             double eCo = eSmoCoSum / (sp->GetSize() + sq->GetSize()); // + 0
             double eOcc = params.occPriorWeight;
 
             if (eCo <= eHi && eCo < eOcc) {
-                bInfo.type = BTCo;
-                bInfo.typePrior = 0;
+                bInfo->type = BTCo;
+                bInfo->typePrior = 0;
             } else if (eHi <= eOcc && eHi <= eCo) {
-                bInfo.type = BTHi;
-                bInfo.typePrior = params.hiPriorWeight;
+                bInfo->type = BTHi;
+                bInfo->typePrior = params.hiPriorWeight;
             } else {
-                bInfo.type = BTLo;
-                bInfo.typePrior = params.occPriorWeight;
+                bInfo->type = BTLo;
+                bInfo->typePrior = params.occPriorWeight;
             }
         }
     }
@@ -700,7 +707,7 @@ int SPSegmentationEngine::IterateMoves(int level)
                 if (performanceInfo.levelMaxEDelta[level] < delta)
                     performanceInfo.levelMaxEDelta[level] = delta;
 
-                MovePixelStereo(pixelsImg, *bestMoveData);
+                MovePixelStereo(pixelsImg, boundaryInfo, *bestMoveData);
 
             } else {
                 MovePixel(pixelsImg, *bestMoveData);
@@ -756,7 +763,7 @@ Mat SPSegmentationEngine::GetSegmentedImagePlain()
     return result;
 }
 
-const Vec3b& BoundaryColor(Pixel* p, Pixel* q)
+const Vec3b& BoundaryColor(const BInfoMatrix& bim, Pixel* p, Pixel* q)
 {
     static const Vec3b pixelColors[] = { Vec3b(0, 0, 0), Vec3b(0, 255, 0), Vec3b(255, 0, 0), Vec3b(0, 0, 196), Vec3b(0, 0, 196) };
 
@@ -769,11 +776,11 @@ const Vec3b& BoundaryColor(Pixel* p, Pixel* q)
     if (sp == nullptr || sq == nullptr) 
         return pixelColors[0];
 
-    auto bdIter = sp->boundaryData.find(sq);
-    if (bdIter == sp->boundaryData.end()) 
+    BInfo* bInfo = bim(sp->id, sq->id);
+    if (bInfo == nullptr)
         return pixelColors[0];
     else {
-        if (bdIter->second.type > 0 || bdIter->second.type < 5) return pixelColors[bdIter->second.type];
+        if (bInfo->type > 0 || bInfo->type < 5) return pixelColors[bInfo->type];
         else return pixelColors[0];
     }
 }
@@ -787,7 +794,7 @@ Mat SPSegmentationEngine::GetSegmentedImageStereo()
     for (Pixel& p : pixelsImg) {
         if (p.BLeft()) {
             Pixel* q = PixelAt(pixelsImg, p.row, p.col - 1);
-            const Vec3b& color = BoundaryColor(&p, q);
+            const Vec3b& color = BoundaryColor(boundaryInfo, &p, q);
 
             for (int r = p.ulr; r < p.lrr; r++) {
                 result.at<Vec3b>(r, p.ulc) = color;
@@ -795,7 +802,7 @@ Mat SPSegmentationEngine::GetSegmentedImageStereo()
         }
         if (p.BRight()) {
             Pixel* q = PixelAt(pixelsImg, p.row, p.col + 1);
-            const Vec3b& color = BoundaryColor(&p, q);
+            const Vec3b& color = BoundaryColor(boundaryInfo, &p, q);
 
             for (int r = p.ulr; r < p.lrr; r++) {
                 result.at<Vec3b>(r, p.lrc - 1) = color;
@@ -804,14 +811,14 @@ Mat SPSegmentationEngine::GetSegmentedImageStereo()
         if (p.BTop()) {
             Pixel* q = PixelAt(pixelsImg, p.row - 1, p.col);
 
-            const Vec3b& color = BoundaryColor(&p, q);
+            const Vec3b& color = BoundaryColor(boundaryInfo, &p, q);
             for (int c = p.ulc; c < p.lrc; c++) {
                 result.at<Vec3b>(p.ulr, c) = color;
             }
         }
         if (p.BBottom()) {
             Pixel* q = PixelAt(pixelsImg, p.row + 1, p.col);
-            const Vec3b& color = BoundaryColor(&p, q);
+            const Vec3b& color = BoundaryColor(boundaryInfo, &p, q);
 
             for (int c = p.ulc; c < p.lrc; c++) {
                 result.at<Vec3b>(p.lrr - 1, c) = color;
@@ -937,7 +944,7 @@ void SPSegmentationEngine::PrintDebugInfoStereo()
     cout << "Disp energy mean: " << stat.mean << ", variance: " << stat.var << ", min: " << stat.min << ", max: " << stat.max << endl;
 
     MeanAndVariance(superpixels.begin(), superpixels.end(),
-        [](Superpixel* sp) { return ((SuperpixelStereo*)sp)->GetSmoEnergy(); },
+        [&](Superpixel* sp) { return ((SuperpixelStereo*)sp)->GetSmoEnergy(boundaryInfo); },
         stat);
     cout << "Smo energy mean: " << stat.mean << ", variance: " << stat.var << ", min: " << stat.min << ", max: " << stat.max << endl;
 }
@@ -971,10 +978,10 @@ void SPSegmentationEngine::PrintPerformanceInfo()
     if (params.stereo) {
         for (Superpixel* sp : superpixels) {
             SuperpixelStereo* sps = (SuperpixelStereo*)sp;
-            if (minBDSize > sps->boundaryData.size())
-                minBDSize = sps->boundaryData.size();
-            if (maxBDSize < sps->boundaryData.size())
-                maxBDSize = sps->boundaryData.size();
+            if (minBDSize > sps->neighbors.size())
+                minBDSize = sps->neighbors.size();
+            if (maxBDSize < sps->neighbors.size())
+                maxBDSize = sps->neighbors.size();
         }
         cout << "Max boundary size: " << maxBDSize << endl;
         cout << "Min boundary size: " << minBDSize << endl;
@@ -1073,8 +1080,8 @@ bool SPSegmentationEngine::TryMovePixelStereo(Pixel* p, Pixel* q, PixelMoveData&
     double spEApp = sp->GetAppEnergy(), sqEApp = sq->GetAppEnergy();
     double spEReg = sp->GetRegEnergy(), sqEReg = sq->GetRegEnergy();
     double spEDisp = sp->GetDispSum(), sqEDisp = sq->GetDispSum();
-    double spESmo = sp->GetSmoEnergy(), sqESmo = sq->GetSmoEnergy();
-    double spEPrior = sp->GetPriorEnergy(), sqEPrior = sq->GetPriorEnergy();
+    double spESmo = sp->GetSmoEnergy(boundaryInfo), sqESmo = sq->GetSmoEnergy(boundaryInfo);
+    double spEPrior = sp->GetPriorEnergy(boundaryInfo), sqEPrior = sq->GetPriorEnergy(boundaryInfo);
 
     PixelChangeDataStereo pcd;
     PixelChangeDataStereo qcd;
@@ -1084,7 +1091,7 @@ bool SPSegmentationEngine::TryMovePixelStereo(Pixel* p, Pixel* q, PixelMoveData&
     p->CalcPixelDataStereo(img, depthImg, sp->plane, sq->plane, params.inlierThreshold, params.noDisp, pd);
     sp->GetRemovePixelDataStereo(pd, pcd);
     sq->GetAddPixelDataStereo(pd, qcd);
-    CalcBorderChangeDataStereo(pixelsImg, inliers, params, p, q, psd.bDataP, psd.bDataQ);
+    CalcBorderChangeDataStereo(pixelsImg, inliers, boundaryInfo, params, p, q, psd);
     CalcSuperpixelBoundaryLength(pixelsImg, p, sp, sq, spbl, sqbl, sobl);
 
     psd.p = p;
