@@ -487,12 +487,6 @@ void SPSegmentationEngine::UpdateBoundaryData()
 {
     const int directions[2][3] = { { 0, 1, BLeftFlag }, { 1, 0, BTopFlag } };
 
-    // clear neighbors
-    for (Superpixel* sp : superpixels) {
-        SuperpixelStereo* sps = (SuperpixelStereo*)sp;
-        sps->neighbors.clear();
-    }
-
     // update length & hiSum (written to smoSum)
     for (Pixel& p : pixelsImg) {
         SuperpixelStereo* sp = (SuperpixelStereo*)p.superPixel;
@@ -513,6 +507,17 @@ void SPSegmentationEngine::UpdateBoundaryData()
                     bdpq->hiSum += sum;
                 }
             }
+        }
+    }
+
+    // update neighbors
+    for (Superpixel* sp : superpixels) {
+        SuperpixelStereo* sps = (SuperpixelStereo*)sp;
+        sps->neighbors.clear();
+        for (Superpixel* sq : superpixels) {
+            SuperpixelStereo* sqs = (SuperpixelStereo*)sq;
+            if (boundaryInfo(sps->id, sqs->id) != nullptr) 
+                sps->neighbors.push_back(sqs);
         }
     }
 

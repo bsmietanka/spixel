@@ -173,6 +173,17 @@ public:
         return p;
     }
 
+    void SetNull(int r, int c) 
+    { 
+        BInfo*& p = (*this)(r, c);
+        if (p != nullptr) {
+            delete p;
+            p = nullptr;
+        }
+    }
+
+    int GetDim() const { return dim; }
+
 private:
     void Release()
     {

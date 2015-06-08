@@ -260,15 +260,16 @@ void MovePixelStereo(Matrix<Pixel>& pixelsImg, BInfoMatrix& bim, PixelMoveData& 
     UpdateBoundaryInfo(pmd.bDataP, sp, bim);
     UpdateBoundaryInfo(pmd.bDataQ, sq, bim);
 
-    // Remove neighbors p (if any)
+    // Remove neighbors sp (if any)
     for (SuperpixelStereo* sr : pmd.nbRemoveP) {
+        bim.SetNull(sr->id, sp->id);
         sp->neighbors.erase(remove(sp->neighbors.begin(), sp->neighbors.end(), sr),
             sp->neighbors.end());
         sr->neighbors.erase(remove(sr->neighbors.begin(), sr->neighbors.end(), sp),
             sr->neighbors.end());
     }
 
-    // Add neighbors to q (if any)
+    // Add neighbors to sq (if any)
     for (SuperpixelStereo* sr : pmd.nbAddQ) {
         sq->neighbors.push_back(sr);
         sr->neighbors.push_back(sq);
