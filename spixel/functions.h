@@ -96,5 +96,7 @@ void LeastSquaresPlane(int sumIRow, int sumIRow2, int sumICol, int sumICol2, int
 // Equation (8) for superpixel sp
 void CalcDispEnergy(SuperpixelStereo* sp, const cv::Mat1d& dispImg, double noDisp);
 
-double CalcCoSmoothnessSum(const cv::Mat1b& inliers, SuperpixelStereo* sp, SuperpixelStereo* sq);
+void CalcCoSmoothnessSum(const cv::Mat1d& inliers, double inlierThresh, SuperpixelStereo* sp, SuperpixelStereo* sq, double& eSmo, int& count);
+
+
 

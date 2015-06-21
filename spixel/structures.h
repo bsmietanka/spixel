@@ -45,6 +45,7 @@ struct BInfo {
     int length = 0;             // Length of boundary (between two superpixels)
     double coSum = 0.0;         // Smo value (sum) for coplanarity
     double hiSum = 0.0;         // Smo value (sum) for hinge
+    int coCount = 0;
 };
 
 // Functions
@@ -337,19 +338,100 @@ struct Pixel { // : public custom_alloc {
         }
     }
 
-    double CalcCoSmoothnessSum(const cv::Mat1b& inliers, const Plane_d& planep, const Plane_d& planeq) const
+    // Estimate inliers on-the-fly (use when re-estimate boundary data)
+    void CalcHiSmoothnessSumEI(byte sideFlag, 
+        const cv::Mat1d& depthImg, double inlierThresh, 
+        const Plane_d& planep, const Plane_d& planeq,
+        double& sum, int& count) const
     {
-        double sum = 0.0;
+        sum = 0.0;
+        count = 0;
 
+        if (sideFlag == BLeftFlag) {
+            for (int i = ulr; i < (int)lrr; i++) {
+                const double& disp = depthImg(i, ulc);
+
+                if (disp > 0) {
+                    double pdp = DotProduct(planep, i, ulc, 1.0);
+                    double qdp = DotProduct(planeq, i, ulc, 1.0);
+
+                    if (fabs(pdp - disp) < inlierThresh && fabs(qdp - disp) < inlierThresh) {
+                        sum += Sqr(pdp - qdp);
+                        count++;
+                    }
+                }
+            }
+        } else if (sideFlag == BRightFlag) {
+            for (int i = ulr; i < (int)lrr; i++) {
+                const double& disp = depthImg(i, lrc - 1);
+
+                if (disp > 0) {
+                    double pdp = DotProduct(planep, i, lrc - 1, 1.0);
+                    double qdp = DotProduct(planeq, i, lrc - 1, 1.0);
+
+                    if (fabs(pdp - disp) < inlierThresh && fabs(qdp - disp) < inlierThresh) {
+                        sum += Sqr(pdp - qdp);
+                        count++;
+                    }
+                }
+            }
+        } else if (sideFlag == BTopFlag) {
+            for (int j = ulc; j < (int)lrc; j++) {
+                const double& disp = depthImg(ulr, j);
+
+                if (disp > 0) {
+                    double pdp = DotProduct(planep, ulr, j, 1.0);
+                    double qdp = DotProduct(planeq, ulr, j, 1.0);
+
+                    if (fabs(pdp - disp) < inlierThresh && fabs(qdp - disp) < inlierThresh) {
+                        sum += Sqr(pdp - qdp);
+                        count++;
+                    }
+                }
+            }
+        } else if (sideFlag == BTopFlag) {
+            for (int j = ulc; j < (int)lrc; j++) {
+                const double& disp = depthImg(lrr - 1, j);
+
+                if (disp > 0) {
+                    double pdp = DotProduct(planep, lrr - 1, j, 1.0);
+                    double qdp = DotProduct(planeq, lrr - 1, j, 1.0);
+
+                    if (fabs(pdp - disp) < inlierThresh && fabs(qdp - disp) < inlierThresh) {
+                        sum += Sqr(pdp - qdp);
+                        count++;
+                    }
+                }
+            }
+        }
+    }
+
+    void AddToCoSmoothnessSum(const cv::Mat1d& depthImg, double inlierThresh, const Plane_d& planep, const Plane_d& planeq, double& sum, int& count) const
+    {
         for (int i = ulr; i < (int)lrr; i++) {
             for (int j = ulc; j < (int)lrc; j++) {
-                if (inliers(i, j) > 0) {
-                    double ddelta = DotProduct(planep, i, j, 1.0) - DotProduct(planeq, i, j, 1.0);
-                    sum += ddelta*ddelta;
+                const double& disp = depthImg(i, j);
+
+                if (disp > 0) {
+                    double pdp = DotProduct(planep, i, j, 1.0);
+                    double qdp = DotProduct(planeq, i, j, 1.0);
+
+                    if (fabs(pdp - disp) < inlierThresh && fabs(qdp - disp) < inlierThresh) {
+                        sum += Sqr(pdp - qdp);
+                        count++;
+                    }
                 }
             }
         } 
-        return sum;
+    }
+
+    void SubtractFromCoSmoothnessSum(const cv::Mat1d& depthImg, double inlierThresh, const Plane_d& planep, const Plane_d& planeq, double& sum, int& count) const
+    {
+        double sumAdd = 0.0;
+        int countAdd = 0;
+        AddToCoSmoothnessSum(depthImg, inlierThresh, planep, planeq, sumAdd, countAdd);
+        sum -= sumAdd;
+        count -= countAdd;
     }
 
     void AddDispPixels(const cv::Mat1d& dispImg, vector<cv::Point3d>& pixels)
@@ -654,7 +736,7 @@ public:
         for (auto& bdItem : boundaryData) {
             const BInfo& bInfo = bdItem.second;
             if (bInfo.length > 0) {
-                if (bInfo.type == BTCo) result += bInfo.coSum / (size + bdItem.first->size);
+                if (bInfo.type == BTCo) result += bInfo.coSum / bInfo.coCount; // (size + bdItem.first->size);
                 else if (bInfo.type == BTHi) result += bInfo.coSum / bInfo.length;
             }
         }

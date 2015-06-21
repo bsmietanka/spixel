@@ -242,14 +242,14 @@ void MovePixel(Matrix<Pixel>& pixelsImg, PixelMoveData& pmd)
 
 void MovePixelStereo(Matrix<Pixel>& pixelsImg, PixelMoveData& pmd)
 {
-    MovePixel(pixelsImg, pmd);
-
     SuperpixelStereo* sp = (SuperpixelStereo*)pmd.p->superPixel;
     SuperpixelStereo* sq = (SuperpixelStereo*)pmd.q->superPixel;
 
+    MovePixel(pixelsImg, pmd);
+
     // Update boundary
-    sp->boundaryData = std::move(pmd.bDataP);
-    sq->boundaryData = std::move(pmd.bDataQ);
+    std::swap(sp->boundaryData, pmd.bDataP);
+    std::swap(sq->boundaryData, pmd.bDataQ);
 
     // Update neighboring boundaries
     for (auto& bdIter : sp->boundaryData) {
@@ -458,20 +458,20 @@ void CalcOccSmoothnessEnergy(SuperpixelStereo* sp, SuperpixelStereo* sq, double 
     eSmo = 0;
 }
 
-double CalcCoSmoothnessSum(const cv::Mat1b& inliers, SuperpixelStereo* sp, SuperpixelStereo* sq)
+void CalcCoSmoothnessSum(const cv::Mat1d& depthImg, double inlierThresh, SuperpixelStereo* sp, SuperpixelStereo* sq, double& eSmo, int& count)
 {
-    if (sp->pixels.empty() && sq->pixels.empty())
-        return 0.0;
+    eSmo = 0;
+    count = 0;
 
-    double eSmo = 0;
+    if (sp->pixels.empty() && sq->pixels.empty())
+        return;
 
     for (Pixel* p : sp->pixels) {
-        eSmo += p->CalcCoSmoothnessSum(inliers, sp->plane, sq->plane);
+        p->AddToCoSmoothnessSum(depthImg, inlierThresh, sp->plane, sq->plane, eSmo, count);
     }
     for (Pixel* q : sq->pixels) {
-        eSmo += q->CalcCoSmoothnessSum(inliers, sp->plane, sq->plane);
+        q->AddToCoSmoothnessSum(depthImg, inlierThresh, sp->plane, sq->plane, eSmo, count);
     }
-    return eSmo;
 }
 
 /*

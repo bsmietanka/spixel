@@ -27,8 +27,9 @@ double TotalEnergyDelta(const SPSegmentationParameters& params, PixelMoveData* p
     return eSum;
 }
 
+// On-the-fly re-estimation
 void UpdateHingeBoundaryData(const Pixel* r, byte sideFlag, const Pixel* sideP, SuperpixelStereo* sp, SuperpixelStereo* sq,
-    const cv::Mat1b& inliers,
+    const cv::Mat1d& depthImg, double inlierThresh,
     BorderDataMap& bcdp, BorderDataMap& bcdq,
     unordered_set<SuperpixelStereo*>& nbsps)
 {
@@ -38,9 +39,8 @@ void UpdateHingeBoundaryData(const Pixel* r, byte sideFlag, const Pixel* sideP, 
     double sum = 0;
     int count = 0;
 
-    sideP->CalcHiSmoothnessSum(sideFlag, inliers, sp->plane, sq->plane, sum, count);
-
     if (sr == sp) {
+        sideP->CalcHiSmoothnessSumEI(sideFlag, depthImg, inlierThresh, sp->plane, sq->plane, sum, count);
         BInfo& bip = bcdp[sq];
         bip.hiSum += sum;
         bip.length += count;
@@ -48,6 +48,7 @@ void UpdateHingeBoundaryData(const Pixel* r, byte sideFlag, const Pixel* sideP, 
         biq.hiSum += sum;
         biq.length += count;
     } else if (sr == sq) {
+        sideP->CalcHiSmoothnessSumEI(sideFlag, depthImg, inlierThresh, sp->plane, sq->plane, sum, count);
         BInfo& bip = bcdp[sq];
         bip.hiSum -= sum;
         bip.length -= count;
@@ -55,9 +56,11 @@ void UpdateHingeBoundaryData(const Pixel* r, byte sideFlag, const Pixel* sideP, 
         biq.hiSum -= sum;
         biq.length -= count;
     } else {
+        sideP->CalcHiSmoothnessSumEI(sideFlag, depthImg, inlierThresh, sp->plane, sr->plane, sum, count);
         BInfo& bip = bcdp[sr];
         bip.hiSum -= sum;
         bip.length -= count;
+        sideP->CalcHiSmoothnessSumEI(sideFlag, depthImg, inlierThresh, sq->plane, sr->plane, sum, count);
         BInfo& biq = bcdq[sr];
         biq.hiSum += sum;
         biq.length += count;
@@ -69,7 +72,7 @@ void EstimateBorderType(const SPSegmentationParameters& params, SuperpixelStereo
     SuperpixelStereo* sq, int newSqSize, BInfo& bInfo)
 {
     double eHi = bInfo.hiSum / bInfo.length + params.hiPriorWeight;
-    double eCo = bInfo.coSum / (newSpSize + newSqSize); // + 0
+    double eCo = bInfo.coSum / bInfo.coCount; // (newSpSize + newSqSize); // + 0
     double eOcc = params.occPriorWeight;
 
     if (eCo <= eHi && eCo < eOcc) {
@@ -84,7 +87,8 @@ void EstimateBorderType(const SPSegmentationParameters& params, SuperpixelStereo
     }
 }
 
-void CalcBorderChangeDataStereo(const Matrix<Pixel>& pixelsImg, const cv::Mat1b& inliers, 
+// On-the-fly re-estimation
+void CalcBorderChangeDataStereo(const Matrix<Pixel>& pixelsImg, const cv::Mat1d& depthImg, 
     const SPSegmentationParameters& params, Pixel* p, Pixel* q, BorderDataMap& bcdp, BorderDataMap& bcdq)
 {
     // Move p from sp -> sq
@@ -99,28 +103,32 @@ void CalcBorderChangeDataStereo(const Matrix<Pixel>& pixelsImg, const cv::Mat1b&
 
     // Update hinge sums for neighbors of p
     r = PixelAt(pixelsImg, p->row, p->col + 1);
-    UpdateHingeBoundaryData(r, BLeftFlag, r, sp, sq, inliers, bcdp, bcdq, nbsps);
+    UpdateHingeBoundaryData(r, BLeftFlag, r, sp, sq, depthImg, params.inlierThreshold, bcdp, bcdq, nbsps);
     r = PixelAt(pixelsImg, p->row, p->col - 1);
-    UpdateHingeBoundaryData(r, BLeftFlag, p, sp, sq, inliers, bcdp, bcdq, nbsps);
+    UpdateHingeBoundaryData(r, BLeftFlag, p, sp, sq, depthImg, params.inlierThreshold, bcdp, bcdq, nbsps);
     r = PixelAt(pixelsImg, p->row + 1, p->col);
-    UpdateHingeBoundaryData(r, BTopFlag, r, sp, sq, inliers, bcdp, bcdq, nbsps);
+    UpdateHingeBoundaryData(r, BTopFlag, r, sp, sq, depthImg, params.inlierThreshold, bcdp, bcdq, nbsps);
     r = PixelAt(pixelsImg, p->row - 1, p->col);
-    UpdateHingeBoundaryData(r, BTopFlag, p, sp, sq, inliers, bcdp, bcdq, nbsps);
+    UpdateHingeBoundaryData(r, BTopFlag, p, sp, sq, depthImg, params.inlierThreshold, bcdp, bcdq, nbsps);
 
     // Update coplanarity sums for neighbors of sp and sq
     for (auto& bdIter : sp->boundaryData) {
         SuperpixelStereo* sr = bdIter.first;
-        bcdp[sr].coSum -= p->CalcCoSmoothnessSum(inliers, sp->plane, sr->plane);
+        if (sr != sq) {
+            p->SubtractFromCoSmoothnessSum(depthImg, params.inlierThreshold, sp->plane, sr->plane, bcdp[sr].coSum, bcdp[sr].coCount);
+        }
     }
     for (auto& bdIter : sq->boundaryData) {
         SuperpixelStereo* sr = bdIter.first;
-        bcdp[sr].coSum += p->CalcCoSmoothnessSum(inliers, sp->plane, sr->plane);
+        if (sr != sp) {
+            p->AddToCoSmoothnessSum(depthImg, params.inlierThreshold, sq->plane, sr->plane, bcdq[sr].coSum, bcdq[sr].coCount);
+        }
         nbsps.erase(sr);
     }
 
     // Eventual new neighbor(s) of sq
     for (SuperpixelStereo* snew : nbsps) {
-        bcdq[snew].coSum = CalcCoSmoothnessSum(inliers, sq, snew);
+        CalcCoSmoothnessSum(depthImg, params.inlierThreshold, sq, snew, bcdq[snew].coSum, bcdq[snew].coCount);
     }
 
     nbsps.clear();
@@ -175,7 +183,7 @@ double GetSmoEnergy(const BorderDataMap& bd, SuperpixelStereo* sp, int pSize, Su
     for (auto& bdItem : bd) {
         const BInfo& bInfo = bdItem.second;
         if (bInfo.length > 0) {
-            if (bInfo.type == BTCo) result += bInfo.coSum / (pSize + (bdItem.first == sq ? qSize : bdItem.first->GetSize()));
+            if (bInfo.type == BTCo) result += bInfo.coSum / bInfo.coCount; // (pSize + (bdItem.first == sq ? qSize : bdItem.first->GetSize()));
             else if (bInfo.type == BTHi) result += bInfo.coSum / bInfo.length;
         }
     }
@@ -445,8 +453,8 @@ void SPSegmentationEngine::EstimatePlaneParameters()
     #pragma omp parallel for
     for (int i = 0; i < superpixels.size(); i++) {
         SuperpixelStereo* sp = (SuperpixelStereo*)superpixels[i];
-        //InitSuperpixelPlane(sp, depthImg);
-        InitSuperpixelPlane(sp, depthImgAdj);
+        InitSuperpixelPlane(sp, depthImg);
+        //InitSuperpixelPlane(sp, depthImgAdj);
     }
     t.Stop();
     performanceInfo.ransac += t.GetTimeInSec();
@@ -462,6 +470,7 @@ void SPSegmentationEngine::InitializeStereoEnergies()
     UpdateInliers();
     UpdateDisparitySums();
     UpdateBoundaryData();
+    DebugBoundary();
 }
  
 void SPSegmentationEngine::UpdateDisparitySums()
@@ -472,6 +481,7 @@ void SPSegmentationEngine::UpdateDisparitySums()
     }
 }
 
+// Called in initialization and in re-estimation between layers.
 void SPSegmentationEngine::UpdateBoundaryData()
 {
     const int directions[2][3] = { { 0, 1, BLeftFlag }, { 1, 0, BTopFlag } };
@@ -498,7 +508,7 @@ void SPSegmentationEngine::UpdateBoundaryData()
                     double sum;
                     int size;
 
-                    p.CalcHiSmoothnessSum(directions[dir][2], inliers, sp->plane, sq->plane, sum, size);
+                    q->CalcHiSmoothnessSumEI(directions[dir][2], depthImg, params.inlierThreshold, sp->plane, sq->plane, sum, size);
                     bdpq.length += size;
                     bdpq.hiSum += sum;
                     bdqp.length += size;
@@ -515,15 +525,20 @@ void SPSegmentationEngine::UpdateBoundaryData()
         for (auto& bdIter : sp->boundaryData) {
             BInfo& bInfo = bdIter.second;
             SuperpixelStereo* sq = bdIter.first;
-            double eSmoCoSum = bInfo.coSum = CalcCoSmoothnessSum(inliers, sp, sq);
+            double eSmoCoSum;
+            int eSmoCoCount;
             double eSmoHiSum = bInfo.hiSum;
             double eSmoOcc = 1; // Phi!?
+
+            CalcCoSmoothnessSum(depthImg, params.inlierThreshold, sp, sq, bInfo.coSum, bInfo.coCount);
+            eSmoCoSum = bInfo.coSum;
+            eSmoCoCount = bInfo.coCount;
 
             //double eHi = params.smoWeight*eSmoHiSum / item.second.bSize + params.priorWeight*params.hiPriorWeight;
             //double eCo = params.smoWeight*eSmoCoSum / (sp->GetSize() + sq->GetSize());
             //double eOcc = params.smoWeight*eSmoOcc + params.priorWeight*params.occPriorWeight;
             double eHi = eSmoHiSum / bInfo.length + params.hiPriorWeight;
-            double eCo = eSmoCoSum / (sp->GetSize() + sq->GetSize()); // + 0
+            double eCo = eSmoCoSum / eSmoCoCount; //(sp->GetSize() + sq->GetSize()); // + 0
             double eOcc = params.occPriorWeight;
 
             if (eCo <= eHi && eCo < eOcc) {
@@ -701,13 +716,15 @@ int SPSegmentationEngine::IterateMoves(int level)
                     performanceInfo.levelMaxEDelta[level] = delta;
 
                 MovePixelStereo(pixelsImg, *bestMoveData);
+                DebugBoundary();
+                //DebugNeighborhoods();
 
             } else {
                 MovePixel(pixelsImg, *bestMoveData);
             }
 
             list.PushBack(p);
-            for (int m = 0; m < 5; m++) {
+            for (int m = 0; m < 4; m++) {
                 Pixel* qq = PixelAt(pixelsImg, p->row + nDeltas[m][0], p->col + nDeltas[m][1]);
                 if (qq != nullptr && p->superPixel != qq->superPixel)
                     list.PushBack(qq);
@@ -1084,7 +1101,7 @@ bool SPSegmentationEngine::TryMovePixelStereo(Pixel* p, Pixel* q, PixelMoveData&
     p->CalcPixelDataStereo(img, depthImg, sp->plane, sq->plane, params.inlierThreshold, params.noDisp, pd);
     sp->GetRemovePixelDataStereo(pd, pcd);
     sq->GetAddPixelDataStereo(pd, qcd);
-    CalcBorderChangeDataStereo(pixelsImg, inliers, params, p, q, psd.bDataP, psd.bDataQ);
+    CalcBorderChangeDataStereo(pixelsImg, depthImg, params, p, q, psd.bDataP, psd.bDataQ);
     CalcSuperpixelBoundaryLength(pixelsImg, p, sp, sq, spbl, sqbl, sobl);
 
     psd.p = p;
@@ -1096,6 +1113,7 @@ bool SPSegmentationEngine::TryMovePixelStereo(Pixel* p, Pixel* q, PixelMoveData&
     psd.bLenDelta = sqbl - spbl;
     psd.eDispDelta = spEDisp + sqEDisp - pcd.newEDisp - qcd.newEDisp;
     psd.ePriorDelta = 0;
+    psd.eSmoDelta = 0;
     psd.eSmoDelta = spESmo + sqESmo - GetSmoEnergy(psd.bDataP, sp, psd.pSize, sq, psd.qSize) -
         GetSmoEnergy(psd.bDataQ, sq, psd.qSize, sp, psd.pSize);
     psd.allowed = true;
@@ -1105,6 +1123,132 @@ bool SPSegmentationEngine::TryMovePixelStereo(Pixel* p, Pixel* q, PixelMoveData&
     return true;
 }
 
+void SPSegmentationEngine::DebugNeighborhoods()
+{
+    const int directions[2][3] = { { 0, 1, BLeftFlag }, { 1, 0, BTopFlag } };
+
+    // update length & hiSum (written to smoSum)
+    for (Pixel& p : pixelsImg) {
+        SuperpixelStereo* sp = (SuperpixelStereo*)p.superPixel;
+
+        for (int dir = 0; dir < 2; dir++) {
+            Pixel* q = PixelAt(pixelsImg, p.row + directions[dir][0], p.col + directions[dir][1]);
+
+            if (q != nullptr) {
+                SuperpixelStereo* sq = (SuperpixelStereo*)q->superPixel;
+
+                if (sp->id != sq->id) {
+                    if (sp->boundaryData.find(sq) == sp->boundaryData.end())
+                        throw Exception();
+                    if (sq->boundaryData.find(sp) == sq->boundaryData.end())
+                        throw Exception();
+                }
+            }
+        }
+    }
+
+}
+
+void SPSegmentationEngine::DebugBoundary()
+{
+    const int directions[2][3] = { { 0, 1, BLeftFlag }, { 1, 0, BTopFlag } };
+
+    // unordered map is not used; pair does not have hash function, but performance is not important....
+    map<pair<SuperpixelStereo*, SuperpixelStereo*>, BInfo> newBoundaryData;
+
+    // update length & hiSum (written to smoSum)
+    for (Pixel& p : pixelsImg) {
+        SuperpixelStereo* sp = (SuperpixelStereo*)p.superPixel;
+
+        for (int dir = 0; dir < 2; dir++) {
+            Pixel* q = PixelAt(pixelsImg, p.row + directions[dir][0], p.col + directions[dir][1]);
+
+            if (q != nullptr) {
+                SuperpixelStereo* sq = (SuperpixelStereo*)q->superPixel;
+
+                if (q->superPixel != sp) {
+                    BInfo& bdpq = newBoundaryData[pair<SuperpixelStereo*, SuperpixelStereo*>(sp, sq)];
+                    BInfo& bdqp = newBoundaryData[pair<SuperpixelStereo*, SuperpixelStereo*>(sq, sp)];
+                    double sum;
+                    int size;
+
+                    q->CalcHiSmoothnessSumEI(directions[dir][2], depthImg, params.inlierThreshold, sp->plane, sq->plane, sum, size);
+                    bdpq.length += size;
+                    bdpq.hiSum += sum;
+                    bdqp.length += size;
+                    bdqp.hiSum += sum;
+                }
+            }
+        }
+    }
+
+
+    for (auto& bdInfoIter : newBoundaryData) {
+        SuperpixelStereo* sp = bdInfoIter.first.first;
+        SuperpixelStereo* sq = bdInfoIter.first.second;
+        BInfo& bInfo = bdInfoIter.second;
+        double eSmoCoSum;
+        int eSmoCoCount;
+        double eSmoHiSum = bInfo.hiSum;
+        double eSmoOcc = 1; // Phi!?
+
+        CalcCoSmoothnessSum(depthImg, params.inlierThreshold, sp, sq, bInfo.coSum, bInfo.coCount);
+        eSmoCoSum = bInfo.coSum;
+        eSmoCoCount = bInfo.coCount;
+
+        //double eHi = params.smoWeight*eSmoHiSum / item.second.bSize + params.priorWeight*params.hiPriorWeight;
+        //double eCo = params.smoWeight*eSmoCoSum / (sp->GetSize() + sq->GetSize());
+        //double eOcc = params.smoWeight*eSmoOcc + params.priorWeight*params.occPriorWeight;
+        double eHi = eSmoHiSum / bInfo.length + params.hiPriorWeight;
+        double eCo = eSmoCoSum / eSmoCoCount; //(sp->GetSize() + sq->GetSize()); // + 0
+        double eOcc = params.occPriorWeight;
+
+        if (eCo <= eHi && eCo < eOcc) {
+            bInfo.type = BTCo;
+            bInfo.typePrior = 0;
+        } else if (eHi <= eOcc && eHi <= eCo) {
+            bInfo.type = BTHi;
+            bInfo.typePrior = params.hiPriorWeight;
+        } else {
+            bInfo.type = BTLo;
+            bInfo.typePrior = params.occPriorWeight;
+        }
+    }
+
+    for (Superpixel* s : superpixels) {
+        SuperpixelStereo* sp = (SuperpixelStereo*)s;
+
+        for (auto& bdIter : sp->boundaryData) {
+            BInfo& bInfo = bdIter.second;
+            SuperpixelStereo* sq = bdIter.first;
+
+            auto nnbIter = newBoundaryData.find(pair<SuperpixelStereo*, SuperpixelStereo*>(sp, sq));
+            if (nnbIter == newBoundaryData.end()) throw exception("Can not find boundary");
+            else { // nnbiter-> re-calculated // bInfo -> currently in 
+                if (nnbIter->second.type != bInfo.type) {
+                    throw exception("type mismatch");
+                }
+                if (bInfo.type == BTCo) {
+                    if (nnbIter->second.coCount != bInfo.coCount) {
+                        throw exception("energy mismatch -- coCount");
+                    }
+                    if (fabs(nnbIter->second.coSum - bInfo.coSum) > 0.01) {
+                        throw exception("energy mismatch -- coSum");
+                    }
+                }
+                if (bInfo.type == BTHi) {
+                    if (fabs(nnbIter->second.hiSum - bInfo.hiSum) > 0.01) {
+                        throw exception("energy mismatch -- hiSum");
+                    }
+                    if (nnbIter->second.length != bInfo.length) {
+                        throw exception("energy mismatch -- length");
+                    }
+                }
+            }
+        }
+    }
+
+}
 
 
 // Functions

@@ -10,7 +10,7 @@ sPixelSize: 3
 stereo: 1
 iterations: 1
 reSteps: 5
-maxLevels: 4
+maxLevels: 2
 
 # energy weights
 appWeight: 200.0

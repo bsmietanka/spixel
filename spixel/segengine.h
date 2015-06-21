@@ -31,6 +31,7 @@ struct SPSegmentationParameters {
     int reSteps = 5;
     int maxLevels = 10;
 
+    bool instantBoundary = true;
     bool stereo = false;
     bool inpaint = false;           // use opencv's inpaint method to fill gaps in
                                     // disparity image
@@ -51,6 +52,7 @@ struct SPSegmentationParameters {
         UpdateFromNode(noDisp, node["noDisp"]);
         UpdateFromNode(stereo, node["stereo"]);
         UpdateFromNode(inpaint, node["inpaint"]);
+        UpdateFromNode(instantBoundary, node["instantBoundary"]);
         UpdateFromNode(iterations, node["iterations"]);
         UpdateFromNode(reSteps, node["reSteps"]);
         UpdateFromNode(inlierThreshold, node["inlierThreshold"]);
@@ -167,6 +169,9 @@ private:
     void UpdateBoundaryData();
     void UpdatePlaneParameters();
     void UpdateDisparitySums();
+
+    void DebugNeighborhoods();
+    void DebugBoundary();
 
     bool TryMovePixel(Pixel* p, Pixel* q, PixelMoveData& psd);
     bool TryMovePixelStereo(Pixel* p, Pixel* q, PixelMoveData& psd);
