@@ -42,7 +42,8 @@ const byte BBottomFlag = 8;
 struct BInfo {
     int type = 0;               // Boundary type BTCo, BTHi, ...
     double typePrior = 0;       // Prior weight (dep. of type)
-    int length = 0;             // Length of boundary (between two superpixels)
+    int length = 0;             // boundary length
+    int hiCount = 0;            // "Length" of boundary (inliers count for hinge)
     double coSum = 0.0;         // Smo value (sum) for coplanarity
     double hiSum = 0.0;         // Smo value (sum) for hinge
     int coCount = 0;
@@ -185,6 +186,7 @@ struct PixelMoveData {
     int qSize;          // superpixel of q size
     PixelData pixelData;
     BorderDataMap bDataP, bDataQ;
+    unordered_set<SuperpixelStereo*> prem;  // neighbors of superpixel sp which need to be removed
 };
 
 struct PixelChangeData {
@@ -297,6 +299,7 @@ struct Pixel { // : public custom_alloc {
         return sumDisp;
     }
 
+    /*
     void CalcHiSmoothnessSum(byte sideFlag, const cv::Mat1b& inliers, const Plane_d& planep, const Plane_d& planeq,
         double& sum, int& count) const
     {
@@ -337,15 +340,17 @@ struct Pixel { // : public custom_alloc {
             }
         }
     }
+    */
 
     // Estimate inliers on-the-fly (use when re-estimate boundary data)
     void CalcHiSmoothnessSumEI(byte sideFlag, 
         const cv::Mat1d& depthImg, double inlierThresh, 
         const Plane_d& planep, const Plane_d& planeq,
-        double& sum, int& count) const
+        double& sum, int& count, int& length) const
     {
         sum = 0.0;
         count = 0;
+        length = 0;
 
         if (sideFlag == BLeftFlag) {
             for (int i = ulr; i < (int)lrr; i++) {
@@ -361,6 +366,7 @@ struct Pixel { // : public custom_alloc {
                     }
                 }
             }
+            length = lrr - ulr;
         } else if (sideFlag == BRightFlag) {
             for (int i = ulr; i < (int)lrr; i++) {
                 const double& disp = depthImg(i, lrc - 1);
@@ -375,6 +381,7 @@ struct Pixel { // : public custom_alloc {
                     }
                 }
             }
+            length = lrr - ulr;
         } else if (sideFlag == BTopFlag) {
             for (int j = ulc; j < (int)lrc; j++) {
                 const double& disp = depthImg(ulr, j);
@@ -389,6 +396,7 @@ struct Pixel { // : public custom_alloc {
                     }
                 }
             }
+            length = lrc - ulc;
         } else if (sideFlag == BTopFlag) {
             for (int j = ulc; j < (int)lrc; j++) {
                 const double& disp = depthImg(lrr - 1, j);
@@ -403,6 +411,7 @@ struct Pixel { // : public custom_alloc {
                     }
                 }
             }
+            length = lrc - ulc;
         }
     }
 
@@ -737,7 +746,7 @@ public:
             const BInfo& bInfo = bdItem.second;
             if (bInfo.length > 0) {
                 if (bInfo.type == BTCo) result += bInfo.coSum / bInfo.coCount; // (size + bdItem.first->size);
-                else if (bInfo.type == BTHi) result += bInfo.coSum / bInfo.length;
+                else if (bInfo.type == BTHi) result += bInfo.hiSum / bInfo.hiCount;
             }
         }
         return result;

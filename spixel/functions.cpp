@@ -259,6 +259,11 @@ void MovePixelStereo(Matrix<Pixel>& pixelsImg, PixelMoveData& pmd)
         if (bdIter.first != sp) bdIter.first->boundaryData[sq] = bdIter.second;
     }
 
+    // Remove neighborhood data of sp, if any
+    for (SuperpixelStereo* sr : pmd.prem) {
+        sr->boundaryData.erase(sp);
+    }
+
 }
 
 // Return true if superpixel sp is connected in region defined by upper left/lower right corners of pixelsImg
