@@ -132,7 +132,7 @@ private:
 
     // Support structures
     Matrix<Pixel> pixelsImg;    // pixels matrix, dimension varies, depends on level
-    Mat1b inliers;              // boolean matrix of "inliers" (for stereo)
+    //Mat1b inliers;              // boolean matrix of "inliers" (for stereo)
     Matrix<Pixel*> ppImg;       // matrix of dimension of img, pointers to pixelsImg pixels (for stereo)
     vector<Superpixel*> superpixels;
     //map<SPSPair, BInfo> boundaryData;
@@ -165,10 +165,10 @@ private:
     void EstimatePlaneParameters();
     bool SplitPixels();
     void Reset();
-    void UpdateInliers();
     void UpdateBoundaryData();
     void UpdatePlaneParameters();
-    void UpdateDisparitySums();
+    void UpdateStereoSums();
+    void UpdateDispSums();
 
     void DebugNeighborhoods();
     void DebugBoundary();

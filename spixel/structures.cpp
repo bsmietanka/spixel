@@ -127,11 +127,11 @@ void SuperpixelStereo::SetPlane(Plane_d& plane_)
     plane = plane_;
 }
 
-void SuperpixelStereo::UpdateDispSum(const cv::Mat1d& depthImg, const cv::Mat1b& inliers, double noDisp)
+void SuperpixelStereo::UpdateDispSum(const cv::Mat1d& depthImg, double inlierThresh, double noDisp)
 {
     sumDisp = 0;
     for (Pixel* p : pixels) {
-        sumDisp += p->CalcDispSum(depthImg, inliers, plane, noDisp);
+        sumDisp += p->CalcDispSum(depthImg, plane, inlierThresh, noDisp);
     }
 }
 

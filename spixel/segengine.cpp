@@ -78,8 +78,8 @@ void UpdateHingeBoundaryData(const Pixel* r, byte sideFlag, const Pixel* sideP, 
 void EstimateBorderType(const SPSegmentationParameters& params, SuperpixelStereo* sp, int newSpSize, 
     SuperpixelStereo* sq, int newSqSize, BInfo& bInfo)
 {
-    double eHi = bInfo.hiSum / bInfo.hiCount + params.hiPriorWeight;
-    double eCo = bInfo.coSum / bInfo.coCount; // (newSpSize + newSqSize); // + 0
+    double eHi = bInfo.hiCount == 0 ? HUGE_VAL : (bInfo.hiSum / bInfo.hiCount + params.hiPriorWeight);
+    double eCo = bInfo.coCount == 0 ? HUGE_VAL : (bInfo.coSum / bInfo.coCount); // (newSpSize + newSqSize); // + 0
     double eOcc = params.occPriorWeight;
 
     if (eCo <= eHi && eCo < eOcc) {
@@ -239,7 +239,7 @@ SPSegmentationEngine::SPSegmentationEngine(SPSegmentationParameters params, Mat 
         else depthImgAdj = FillGapsInDisparityImage(depthImg);
     }
     //depthImg = FillGapsInDisparityImage(depthImg);
-    inliers = Mat1b(depthImg.rows, depthImg.cols);
+    //inliers = Mat1b(depthImg.rows, depthImg.cols);
 }
 
 SPSegmentationEngine::~SPSegmentationEngine()
@@ -421,30 +421,33 @@ void SPSegmentationEngine::ProcessImageStereo()
 void SPSegmentationEngine::ReEstimatePlaneParameters()
 {
     for (int s = 0; s < params.reSteps; s++) {
-        UpdateBoundaryData();
         UpdatePlaneParameters();
+        UpdateBoundaryData();
     }
-    UpdateDisparitySums();
+    UpdateDispSums();
 }
 
 void SPSegmentationEngine::UpdatePlaneParameters()
 {
+    UpdateStereoSums();
     for (int i = 0; i < superpixels.size(); i++) {
         SuperpixelStereo* sp = (SuperpixelStereo*)superpixels[i];
         bool updated = false;
 
-        for (auto& bd : sp->boundaryData) {
-            SuperpixelStereo* sq = (SuperpixelStereo*)bd.first;
-            if (bd.second.type == BTCo /* && sp < bd.first */) {
-                sp->CalcPlaneLeastSquares(sq, depthImg);
-                updated = true;
-            }
-        }
-        if (!updated) {
-            sp->CalcPlaneLeastSquares(depthImg);
-        }
+        //for (auto& bd : sp->boundaryData) {
+        //    SuperpixelStereo* sq = (SuperpixelStereo*)bd.first;
+        //    if (bd.second.type == BTCo /* && sp < bd.first */) {
+        //        sp->CalcPlaneLeastSquares(sq, depthImg);
+        //        updated = true;
+        //    }
+        //}
+        //if (!updated) {
+        //    sp->CalcPlaneLeastSquares(depthImg);
+        //}
+        sp->CalcPlaneLeastSquares(sp->boundaryData.begin(), sp->boundaryData.end(), 
+            [](BorderDataMap::const_iterator iter) { return iter->second.type == BTCo ? iter->first : nullptr; },
+            depthImg);
     }
-    UpdateInliers();
 }
 
 void SPSegmentationEngine::PrintDebugInfo2()
@@ -478,19 +481,72 @@ void SPSegmentationEngine::EstimatePlaneParameters()
 
 void SPSegmentationEngine::InitializeStereoEnergies()
 {
-    UpdateInliers();
-    UpdateDisparitySums();
+    //UpdateInliers();
+    //UpdateStereoSums();
     UpdateBoundaryData();
+    UpdateDispSums();
     DebugBoundary();
 }
  
-void SPSegmentationEngine::UpdateDisparitySums()
+void SPSegmentationEngine::UpdateStereoSums()
 {
     for (Superpixel* sp : superpixels) {
         SuperpixelStereo* sps = (SuperpixelStereo*)sp;
-        sps->UpdateDispSum(depthImg, inliers, params.noDisp);
+
+        sps->sumIRow = 0; sps->sumICol = 0;         // Sum of terms computed for inlier points
+        sps->sumIRow2 = 0; sps->sumICol2 = 0;
+        sps->sumIRowCol = 0;
+        sps->sumIRowD = 0.0, sps->sumIColD = 0.0;
+        sps->sumID = 0.0;
+        sps->nI = 0;
+    }
+    for (int i = 0; i < ppImg.rows; i++) {
+        for (int j = 0; j < ppImg.cols; j++) {
+            Pixel* p = ppImg(i, j);
+            SuperpixelStereo* sps = (SuperpixelStereo*)p->superPixel;
+            const double& disp = depthImg(i, j);
+
+            if (disp > 0) {
+                double delta = DotProduct(sps->plane, i, j, 1.0) - disp;
+
+                if (fabs(delta) < params.inlierThreshold) {
+                    sps->sumIRow += i; sps->sumIRow2 += i*i;
+                    sps->sumICol += j; sps->sumICol2 += j*j;
+                    sps->sumIRowCol += i*j;
+                    sps->sumIRowD += i*disp; sps->sumIColD += j*disp;
+                    sps->sumID += disp;
+                    sps->nI++;
+                }
+            }
+        }
     }
 }
+
+void SPSegmentationEngine::UpdateDispSums()
+{
+    for (Superpixel* sp : superpixels) {
+        SuperpixelStereo* sps = (SuperpixelStereo*)sp;
+
+        sps->sumDisp = 0.0;
+    }
+    for (int i = 0; i < ppImg.rows; i++) {
+        for (int j = 0; j < ppImg.cols; j++) {
+            Pixel* p = ppImg(i, j);
+            SuperpixelStereo* sps = (SuperpixelStereo*)p->superPixel;
+            const double& disp = depthImg(i, j);
+
+            if (disp > 0) {
+                double delta = DotProduct(sps->plane, i, j, 1.0) - disp;
+
+                if (fabs(delta) < params.inlierThreshold) sps->sumDisp += delta*delta;
+                else sps->sumDisp += params.noDisp;
+            } else {
+                sps->sumDisp += params.noDisp;
+            }
+        }
+    }
+}
+
 
 // Called in initialization and in re-estimation between layers.
 void SPSegmentationEngine::UpdateBoundaryData()
@@ -551,8 +607,8 @@ void SPSegmentationEngine::UpdateBoundaryData()
             //double eHi = params.smoWeight*eSmoHiSum / item.second.bSize + params.priorWeight*params.hiPriorWeight;
             //double eCo = params.smoWeight*eSmoCoSum / (sp->GetSize() + sq->GetSize());
             //double eOcc = params.smoWeight*eSmoOcc + params.priorWeight*params.occPriorWeight;
-            double eHi = eSmoHiSum / bInfo.hiCount + params.hiPriorWeight;
-            double eCo = eSmoCoSum / eSmoCoCount; //(sp->GetSize() + sq->GetSize()); // + 0
+            double eHi = bInfo.hiCount == 0 ? HUGE_VAL : (eSmoHiSum / bInfo.hiCount + params.hiPriorWeight);
+            double eCo = eSmoCoCount == 0 ? HUGE_VAL : (eSmoCoSum / eSmoCoCount); //(sp->GetSize() + sq->GetSize()); // + 0
             double eOcc = params.occPriorWeight;
 
             if (eCo <= eHi && eCo < eOcc) {
@@ -1012,6 +1068,7 @@ void SPSegmentationEngine::PrintPerformanceInfo()
     }
 }
 
+/*
 void SPSegmentationEngine::UpdateInliers()
 {
     for (Superpixel* sp : superpixels) {
@@ -1030,12 +1087,9 @@ void SPSegmentationEngine::UpdateInliers()
             SuperpixelStereo* sps = (SuperpixelStereo*)p->superPixel;
             const double& disp = depthImg(i, j);
 
-            if (disp <= 0) {
-                inliers(i, j) = false;
-            } else {
+            if (disp > 0) {
                 bool inlier = fabs(DotProduct(sps->plane, i, j, 1.0) - disp) < params.inlierThreshold;
 
-                inliers(i, j) = inlier;
                 if (inlier) {
                     sps->sumIRow += i; sps->sumIRow2 += i*i;
                     sps->sumICol += j; sps->sumICol2 += j*j;
@@ -1048,6 +1102,7 @@ void SPSegmentationEngine::UpdateInliers()
         }
     }
 }
+*/
 
 // Try to move Pixel p to Superpixel containing Pixel q with coordinates (qRow, qCol)
 // Note: pixel q is must be neighbor of p and p->superPixel != q->superPixel
@@ -1216,8 +1271,8 @@ void SPSegmentationEngine::DebugBoundary()
         //double eHi = params.smoWeight*eSmoHiSum / item.second.bSize + params.priorWeight*params.hiPriorWeight;
         //double eCo = params.smoWeight*eSmoCoSum / (sp->GetSize() + sq->GetSize());
         //double eOcc = params.smoWeight*eSmoOcc + params.priorWeight*params.occPriorWeight;
-        double eHi = eSmoHiSum / bInfo.hiCount + params.hiPriorWeight;
-        double eCo = eSmoCoSum / eSmoCoCount; //(sp->GetSize() + sq->GetSize()); // + 0
+        double eHi = bInfo.hiCount == 0 ? HUGE_VAL : (eSmoHiSum / bInfo.hiCount + params.hiPriorWeight);
+        double eCo = eSmoCoCount == 0 ? HUGE_VAL : (eSmoCoSum / eSmoCoCount); //(sp->GetSize() + sq->GetSize()); // + 0
         double eOcc = params.occPriorWeight;
 
         if (eCo <= eHi && eCo < eOcc) {
