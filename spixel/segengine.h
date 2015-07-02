@@ -2,6 +2,7 @@
 
 #include "stdafx.h"
 #include "structures.h"
+#include "tsdeque.h"
 
 using namespace cv;
 using namespace std;
@@ -35,6 +36,7 @@ struct SPSegmentationParameters {
     bool stereo = false;
     bool inpaint = false;           // use opencv's inpaint method to fill gaps in
                                     // disparity image
+    int nThreads = 4;
 
     void read(const FileNode& node)
     {
@@ -58,6 +60,7 @@ struct SPSegmentationParameters {
         UpdateFromNode(inlierThreshold, node["inlierThreshold"]);
         UpdateFromNode(maxUpdates, node["maxUpdates"]);
         UpdateFromNode(maxLevels, node["maxLevels"]);
+        UpdateFromNode(nThreads, node["nThreads"]);
     }
 };
 
@@ -172,9 +175,12 @@ private:
 
     void DebugNeighborhoods();
     void DebugBoundary();
+    void DebugDispSums();
 
     bool TryMovePixel(Pixel* p, Pixel* q, PixelMoveData& psd);
     bool TryMovePixelStereo(Pixel* p, Pixel* q, PixelMoveData& psd);
+
+    void IterateInThread(ParallelDeque<Pixel*, Superpixel*>* pList);
 };
 
 

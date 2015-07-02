@@ -810,43 +810,6 @@ public:
     void CheckRegEnergy();
 };
 
-// CircList 
-// uses "circular" representation based on fixed size vector
-//////////////////////////////////////////////////////////////
-
-template<class T> class CircList {
-private:
-    std::vector<T> vector;
-    size_t start;
-    size_t end;
-    size_t listSize;
-
-public:
-    CircList(size_t maxSize) : start(0), end(0), listSize(0) 
-    {
-        vector.resize(maxSize);
-    }
-
-    size_t Size() const { return listSize; }
-
-    bool Empty() const { return listSize == 0; }
-    
-    void Clear() { start = end = listSize = 0; }
-
-    void PushBack(const T& value) 
-    {
-        CV_DbgAssert(listSize + 1 != vector.size());
-        vector[end] = value;
-        end = (end + 1) % vector.size();
-        listSize++;
-    }
-
-    T& Front() { return vector[start]; }
-
-    const T& Front() const { return vector[start]; }
-    
-    void PopFront() { start = (start + 1) % vector.size(); listSize--; }
-};
 
 // Simple Union-Find disjont set of integers (i.e., equivalence classes)
 // implementation using a vector

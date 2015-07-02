@@ -2,8 +2,18 @@
 #include "segengine.h"
 #include "functions.h"
 #include "utils.h"
+#include "tsdeque.h"
 #include <unordered_map>
 #include <fstream>   
+#include <thread>
+
+
+// Constants
+///////////////////////////////////////////////////////////////////////////////
+
+static const int nDeltas[][2] = { { -1, 0 }, { 1, 0 }, { 0, 1 }, { 0, -1 } };
+static const int nDeltas0[][2] = { { 0, 0 }, { -1, 0 }, { 1, 0 }, { 0, 1 }, { 0, -1 } };
+
 
 // Local functions
 ///////////////////////////////////////////////////////////////////////////////
@@ -485,7 +495,7 @@ void SPSegmentationEngine::InitializeStereoEnergies()
     //UpdateStereoSums();
     UpdateBoundaryData();
     UpdateDispSums();
-    DebugBoundary();
+    //DebugBoundary();
 }
  
 void SPSegmentationEngine::UpdateStereoSums()
@@ -707,43 +717,43 @@ bool SPSegmentationEngine::SplitPixels()
     return true;
 }
 
-// Returns number of iterations
-int SPSegmentationEngine::IterateMoves(int level)
+// Lock function for non-stereo iterations
+// These are neighbors of p
+void LockNonStereo(Pixel*& p, unordered_set<Superpixel*>& toLock, const Matrix<Pixel>& pixelsImg)
 {
-    // tuple: (p, q), p, q are neighboring Pixels
-    // We move pixel p to superpixel q->superPixel
-    // typedef tuple<Pixel*, Pixel*> ListItem;
-    static const int nDeltas[][2] = { { -1, 0 }, { 1, 0 }, { 0, 1 }, { 0, -1 } };
+    for (int m = 0; m < 5; m++) {
+        const Pixel* q = PixelAt(pixelsImg, p->row + nDeltas0[m][0], p->col + nDeltas0[m][1]);
+        if (q != nullptr) 
+            toLock.insert(q->superPixel);
+    }
+}
 
-    CircList<Pixel*> list(10 * pixelsImg.rows * pixelsImg.cols); 
-    int itemCount = 1;
-
-    // Initialize pixel (block) border list 
-    for (Pixel& p : pixelsImg) {
-        Pixel* q;
-
-        for (int m = 0; m < 4; m++) {
-            q = PixelAt(pixelsImg, p.row + nDeltas[m][0], p.col + nDeltas[m][1]);
-            if (q != nullptr && p.superPixel != q->superPixel) {
-                list.PushBack(&p);
-                break;
+// Lock function for stereo iterations
+void LockStereo(Pixel*& p, unordered_set<Superpixel*>& toLock, const Matrix<Pixel>& pixelsImg)
+{
+    for (int m = 0; m < 5; m++) {
+        const Pixel* q = PixelAt(pixelsImg, p->row + nDeltas0[m][0], p->col + nDeltas0[m][1]);
+        if (q != nullptr) {
+            SuperpixelStereo* sps = (SuperpixelStereo*)q->superPixel;
+            for (auto& bdIter : sps->boundaryData) {
+                toLock.insert(bdIter.first);
             }
         }
     }
+}
 
-    int count = 0;
+void SPSegmentationEngine::IterateInThread(ParallelDeque<Pixel*, Superpixel*>* pList)
+{
     PixelMoveData tryMoveData[4];
     Superpixel* nbsp[5];
     int nbspSize;
 
-    if (performanceInfo.levelMaxEDelta.size() <= level) {
-        performanceInfo.levelMaxEDelta.resize(level + 1);
-        performanceInfo.levelMaxEDelta[level] = 0;
-    }
+    while (!pList->Empty() && pList->GetPopCount() < params.maxUpdates) {
+        Pixel* p = pList->PopAndLock();
 
-    while (!list.Empty() && count < params.maxUpdates) {
-        Pixel*& p = list.Front();
-
+        if (p == nullptr) 
+            continue;
+        
         nbsp[0] = p->superPixel;
         nbspSize = 1;
         for (int m = 0; m < 4; m++) {
@@ -761,7 +771,7 @@ int SPSegmentationEngine::IterateMoves(int level)
                 }
                 if (!newNeighbor) tryMoveData[m].allowed = false;
                 else {
-                    if (params.stereo) TryMovePixelStereo(p, q, tryMoveData[m]); 
+                    if (params.stereo) TryMovePixelStereo(p, q, tryMoveData[m]);
                     else TryMovePixel(p, q, tryMoveData[m]);
                     nbsp[nbspSize++] = q->superPixel;
                 }
@@ -782,29 +792,166 @@ int SPSegmentationEngine::IterateMoves(int level)
 
                 double delta = TotalEnergyDelta(params, bestMoveData);
 
-                if (performanceInfo.levelMaxEDelta[level] < delta)
-                    performanceInfo.levelMaxEDelta[level] = delta;
+                //if (performanceInfo.levelMaxEDelta[level] < delta)
+                //    performanceInfo.levelMaxEDelta[level] = delta;
 
                 MovePixelStereo(pixelsImg, *bestMoveData);
-                DebugBoundary();
+                //DebugBoundary();
+                //DebugDispSums();
                 //DebugNeighborhoods();
 
             } else {
                 MovePixel(pixelsImg, *bestMoveData);
             }
 
-            list.PushBack(p);
+            pList->PushBack(p);
             for (int m = 0; m < 4; m++) {
                 Pixel* qq = PixelAt(pixelsImg, p->row + nDeltas[m][0], p->col + nDeltas[m][1]);
                 if (qq != nullptr && p->superPixel != qq->superPixel)
-                    list.PushBack(qq);
+                    pList->PushBack(qq);
             }
         }
 
-        list.PopFront();
-        count++;
+        pList->Release(p);
     }
-    return count;
+}
+
+// Returns number of iterations
+//int SPSegmentationEngine::IterateMoves(int level)
+//{
+//    ParallelDeque<Pixel*, Superpixel*> list(pixelsImg.rows * pixelsImg.cols);
+//    int itemCount = 1;
+//
+//    list.SetEmptyVal(nullptr);
+//    if (params.stereo) {
+//        list.SetLockFunction([&](const Pixel*& p, unordered_set<const Superpixel*>& forb) { LockNonStereo(p, forb, pixelsImg); });
+//    } else {
+//        list.SetLockFunction([&](const Pixel*& p, unordered_set<const Superpixel*>& forb) { LockStereo(p, forb, pixelsImg); });
+//    }
+//
+//    // Initialize pixel (block) border list 
+//    for (Pixel& p : pixelsImg) {
+//        Pixel* q;
+//
+//        for (int m = 0; m < 4; m++) {
+//            q = PixelAt(pixelsImg, p.row + nDeltas[m][0], p.col + nDeltas[m][1]);
+//            if (q != nullptr && p.superPixel != q->superPixel) {
+//                list.PushBack(&p);
+//                break;
+//            }
+//        }
+//    }
+//
+//    int count = 0;
+//    PixelMoveData tryMoveData[4];
+//    Superpixel* nbsp[5];
+//    int nbspSize;
+//
+//    if (performanceInfo.levelMaxEDelta.size() <= level) {
+//        performanceInfo.levelMaxEDelta.resize(level + 1);
+//        performanceInfo.levelMaxEDelta[level] = 0;
+//    }
+//
+//    while (!list.Empty() && count < params.maxUpdates) {
+//        Pixel* p = list.PopAndLock();
+//
+//        nbsp[0] = p->superPixel;
+//        nbspSize = 1;
+//        for (int m = 0; m < 4; m++) {
+//            Pixel* q = PixelAt(pixelsImg, p->row + nDeltas[m][0], p->col + nDeltas[m][1]);
+//
+//            if (q == nullptr) tryMoveData[m].allowed = false;
+//            else {
+//                bool newNeighbor = true;
+//
+//                for (int i = 0; i < nbspSize; i++) {
+//                    if (q->superPixel == nbsp[i]) {
+//                        newNeighbor = false;
+//                        break;
+//                    }
+//                }
+//                if (!newNeighbor) tryMoveData[m].allowed = false;
+//                else {
+//                    if (params.stereo) TryMovePixelStereo(p, q, tryMoveData[m]); 
+//                    else TryMovePixel(p, q, tryMoveData[m]);
+//                    nbsp[nbspSize++] = q->superPixel;
+//                }
+//            }
+//        }
+//
+//        PixelMoveData* bestMoveData = FindBestMoveData(params, tryMoveData);
+//
+//        if (bestMoveData != nullptr) {
+//            if (params.stereo) {
+//                //SuperpixelStereo* sps = (SuperpixelStereo*)(bestMoveData->p->superPixel);
+//                //double calc = sps->CalcDispEnergy(depthImg, params.inlierThreshold, params.noDisp);
+//                //if (fabs(calc - sps->GetDispSum()) > 0.01) {
+//                //    cout << "Disp sum mismatch";
+//                //}
+//                //sps->CheckRegEnergy();
+//                //sps->CheckAppEnergy(img);
+//
+//                double delta = TotalEnergyDelta(params, bestMoveData);
+//
+//                if (performanceInfo.levelMaxEDelta[level] < delta)
+//                    performanceInfo.levelMaxEDelta[level] = delta;
+//
+//                MovePixelStereo(pixelsImg, *bestMoveData);
+//                //DebugBoundary();
+//                //DebugDispSums();
+//                //DebugNeighborhoods();
+//
+//            } else {
+//                MovePixel(pixelsImg, *bestMoveData);
+//            }
+//
+//            list.PushBack(p);
+//            for (int m = 0; m < 4; m++) {
+//                Pixel* qq = PixelAt(pixelsImg, p->row + nDeltas[m][0], p->col + nDeltas[m][1]);
+//                if (qq != nullptr && p->superPixel != qq->superPixel)
+//                    list.PushBack(qq);
+//            }
+//        }
+//
+//        list.PopFront();
+//        count++;
+//    }
+//    return count;
+//}
+
+int SPSegmentationEngine::IterateMoves(int level)
+{
+    ParallelDeque<Pixel*, Superpixel*> list(pixelsImg.rows * pixelsImg.cols);
+    int itemCount = 1;
+
+    list.SetEmptyVal(nullptr);
+    if (params.stereo) {
+        list.SetLockFunction([&](Pixel*& p, unordered_set<Superpixel*>& forb) { LockStereo(p, forb, pixelsImg); });
+    } else {
+        list.SetLockFunction([&](Pixel*& p, unordered_set<Superpixel*>& forb) { LockNonStereo(p, forb, pixelsImg); });
+    }
+
+    // Initialize pixel (block) border list 
+    for (Pixel& p : pixelsImg) {
+        Pixel* q;
+
+        for (int m = 0; m < 4; m++) {
+            q = PixelAt(pixelsImg, p.row + nDeltas[m][0], p.col + nDeltas[m][1]);
+            if (q != nullptr && p.superPixel != q->superPixel) {
+                list.PushBack(&p);
+                break;
+            }
+        }
+    }
+
+    thread threads[1];
+
+    for (int ti = 0; ti < 1; ti++) {
+        threads[ti] = thread([&](ParallelDeque<Pixel*, Superpixel*>* pList) { IterateInThread(pList); }, &list);
+    }
+    for (auto& t : threads) { t.join(); }
+
+    return list.GetPopCount();
 }
 
 Mat SPSegmentationEngine::GetSegmentedImage()
@@ -1320,6 +1467,17 @@ void SPSegmentationEngine::DebugBoundary()
         }
     }
 
+}
+
+void SPSegmentationEngine::DebugDispSums()
+{
+    for (Superpixel* sp : superpixels) {
+        SuperpixelStereo* sps = (SuperpixelStereo*)sp;
+        double disp = sps->CalcDispEnergy(depthImg, params.inlierThreshold, params.noDisp);
+        if (fabs(sps->sumDisp - disp) > 0.01) {
+            throw exception("disp sum mismatch");
+        }
+    }
 }
 
 
