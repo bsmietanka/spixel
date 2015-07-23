@@ -2,6 +2,7 @@
 #include "utils.h"
 #include "tinydir.h"
 #include <regex>
+#include <memory>
 
 using namespace std;
 using namespace cv;
@@ -215,5 +216,24 @@ cv::Mat AdjustDisparityImage(const cv::Mat& img)
 
     img.convertTo(imgConv, CV_64FC1, 1 / 256.);
     return imgConv;
+}
+
+string Format(const string& fs, ...)
+{
+    unique_ptr<char[]> result;
+    va_list ap;
+    int newn, n = 2 * fs.size();
+
+    va_start(ap, fs);
+    while (true) {
+        result.reset(new char[n]);
+        strcpy(result.get(), fs.c_str());
+        newn = vsnprintf(result.get(), n, fs.c_str(), ap);
+        if (newn > n) n = newn + 1;
+        else if (newn < 0) n *= 2;
+        else break;
+    }
+    va_end(ap);
+    return string(result.get());
 }
 

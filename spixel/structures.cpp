@@ -153,7 +153,7 @@ void SuperpixelStereo::CalcPlaneLeastSquares(const cv::Mat1d& depthImg)
 {
     LeastSquaresPlane(sumIRow, sumIRow2, sumICol, sumICol2, sumIRowCol, sumIRowD, sumIColD, sumID, nI, plane);
 }
-
+/*
 void SuperpixelStereo::CalcPlaneLeastSquares(SuperpixelStereo* sq, const cv::Mat1d& depthImg)
 {
     LeastSquaresPlane(sumIRow + sq->sumIRow, sumIRow2 + sq->sumIRow2, 
@@ -162,6 +162,7 @@ void SuperpixelStereo::CalcPlaneLeastSquares(SuperpixelStereo* sq, const cv::Mat
         nI + sq->nI, plane);
     sq->plane = plane;
 }
+*/
 
 void SuperpixelStereo::GetRemovePixelDataStereo(const PixelData& pd, PixelChangeDataStereo& pcd) const 
 {

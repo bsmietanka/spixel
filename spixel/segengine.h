@@ -11,6 +11,29 @@ void UpdateFromNode(double& val, const FileNode& node);
 void UpdateFromNode(int& val, const FileNode& node);
 void UpdateFromNode(bool& val, const FileNode& node);
 
+template <typename T> 
+void AddLevelParamFromNode(T& val, const FileNode& parentNode, const string& nodeName,
+    vector<pair<T*, vector<T>>>& paramsList)
+{
+    FileNode n = parentNode[nodeName];
+
+    if (n.empty()) return;
+
+    vector<T> levParams;
+
+    if (n.type() != FileNode::SEQ) {
+        levParams.push_back((T)n);
+    } else {
+        for (FileNode n1 : n) {
+            levParams.push_back((T)n1);
+        }
+    }
+    paramsList.push_back(pair<T*, vector<T>>(&val, levParams));
+    if (!levParams.empty())
+        val = levParams.front();
+}
+
+
 struct SPSegmentationParameters {
     int pixelSize = 16;      // Pixel (block) size -- initial size
     int sPixelSize = 5;      // initial size of superpixels in Pixels (blocks)
@@ -26,11 +49,13 @@ struct SPSegmentationParameters {
     double hiPriorWeight = 5.0;     // \lambda_{hinge}
     double noDisp = 9.0;            // \lambda_{d}
     double inlierThreshold = 3.0;
+    int peblThreshold = 10;         // planeEstimationBundaryLengthThreshold 
+    double updateThreshold = 0.01;
 
     int iterations = 1;
     int maxUpdates = 400000;
     int reSteps = 5;
-    int maxLevels = 10;
+    int minLevel = 0;
 
     bool instantBoundary = true;
     bool stereo = false;
@@ -38,19 +63,24 @@ struct SPSegmentationParameters {
                                     // disparity image
     int nThreads = 4;
 
-    void read(const FileNode& node)
+    vector<pair<double*, vector<double>>> levelParamsDouble;
+    vector<pair<int*, vector<int>>> levelParamsInt;
+
+    void SetLevelParams(int level);
+
+    void Read(const FileNode& node)
     {
         UpdateFromNode(pixelSize, node["pixelSize"]);
         UpdateFromNode(sPixelSize, node["sPixelSize"]);
-        UpdateFromNode(appWeight, node["appWeight"]);
-        UpdateFromNode(regWeight, node["regWeight"]);
-        UpdateFromNode(lenWeight, node["lenWeight"]);
-        UpdateFromNode(sizeWeight, node["sizeWeight"]);
-        UpdateFromNode(dispWeight, node["dispWeight"]);
-        UpdateFromNode(smoWeight, node["smoWeight"]);
-        UpdateFromNode(priorWeight, node["priorWeight"]);
-        UpdateFromNode(occPriorWeight, node["occPriorWeight"]);
-        UpdateFromNode(hiPriorWeight, node["hiPriorWeight"]);
+        AddLevelParamFromNode(appWeight, node, "appWeight");
+        AddLevelParamFromNode(regWeight, node, "regWeight");
+        AddLevelParamFromNode(lenWeight, node, "lenWeight");
+        AddLevelParamFromNode(sizeWeight, node, "sizeWeight");
+        AddLevelParamFromNode(dispWeight, node, "dispWeight");
+        AddLevelParamFromNode(smoWeight, node, "smoWeight");
+        AddLevelParamFromNode(priorWeight, node, "priorWeight");
+        AddLevelParamFromNode(occPriorWeight, node, "occPriorWeight");
+        AddLevelParamFromNode(hiPriorWeight, node, "hiPriorWeight");
         UpdateFromNode(noDisp, node["noDisp"]);
         UpdateFromNode(stereo, node["stereo"]);
         UpdateFromNode(inpaint, node["inpaint"]);
@@ -59,9 +89,23 @@ struct SPSegmentationParameters {
         UpdateFromNode(reSteps, node["reSteps"]);
         UpdateFromNode(inlierThreshold, node["inlierThreshold"]);
         UpdateFromNode(maxUpdates, node["maxUpdates"]);
-        UpdateFromNode(maxLevels, node["maxLevels"]);
+        UpdateFromNode(minLevel, node["minLevel"]);
         UpdateFromNode(nThreads, node["nThreads"]);
+        UpdateFromNode(peblThreshold, node["peblThreshold"]);
+        UpdateFromNode(updateThreshold, node["updateThreshold"]);
     }
+
+private:
+    void AddLevelParamFromNode(double& val, const FileNode& parentNode, const string& nodeName)
+    {
+        ::AddLevelParamFromNode(val, parentNode, nodeName, levelParamsDouble);
+    }
+
+    void AddLevelParamFromNode(int& val, const FileNode& parentNode, const string& nodeName)
+    {
+        ::AddLevelParamFromNode(val, parentNode, nodeName, levelParamsInt);
+    }
+
 };
 
 static void read(const FileNode& node, SPSegmentationParameters& x, const SPSegmentationParameters& defaultValue = SPSegmentationParameters());

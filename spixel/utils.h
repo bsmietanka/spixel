@@ -13,6 +13,8 @@ string ChangeExtension(const string& fileName, const string& newExt);
 // Append '/' to the end of dirName if not present and non-empty
 void EndDir(string& dirName);
 
+string Format(const string& fs, ...);
+
 // From Jian's original code
 cv::Mat ConvertRGBToLab(const cv::Mat& img);
 

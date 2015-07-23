@@ -760,7 +760,7 @@ public:
     //void UpdateInlierSums(const cv::Mat1d& depthImg, const cv::Mat1b& inliers);
     //void UpdateInliers(const cv::Mat1d& depthImg, double threshold, cv::Mat1b& inliers);
     void CalcPlaneLeastSquares(const cv::Mat1d& depthImg);
-    void CalcPlaneLeastSquares(SuperpixelStereo* sq, const cv::Mat1d& depthImg);
+    //void CalcPlaneLeastSquares(SuperpixelStereo* sq, const cv::Mat1d& depthImg);
 
     template<class It, class Pr> void CalcPlaneLeastSquares(It from, It to, Pr pred, const cv::Mat1d& depthImg)
     {
@@ -784,8 +784,8 @@ public:
                 sumIRowCol += sq->sumIRowCol;
                 sumIRowD += sq->sumIRowD;
                 sumIColD += sq->sumIColD;
-                sumID = sq->sumID;
-                nI = sq->nI;
+                sumID += sq->sumID;
+                nI += sq->nI;
             }
         }
         LeastSquaresPlane(sumIRow, sumIRow2, sumICol, sumICol2, sumIRowCol, sumIRowD, sumIColD, sumID, nI, plane);
