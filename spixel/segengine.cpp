@@ -222,16 +222,16 @@ static void read(const FileNode& node, SPSegmentationParameters& x, const SPSegm
 
 void SPSegmentationParameters::SetLevelParams(int level)
 {
-    for (pair<double*, vector<double>>& pData : levelParamsDouble) {
+    for (pair<string, vector<double>>& pData : levelParamsDouble) {
         if (!pData.second.empty()) {
-            *pData.first = (level < pData.second.size()) ? pData.second[level] :
-                *pData.first = pData.second.back();
+            updateDouble[pData.first](*this,
+                (level < pData.second.size()) ? pData.second[level] : pData.second.back());
         }
     }
-    for (pair<int*, vector<int>>& pData : levelParamsInt) {
+    for (pair<string, vector<int>>& pData : levelParamsInt) {
         if (!pData.second.empty()) {
-            *pData.first = (level < pData.second.size()) ? pData.second[level] :
-                *pData.first = pData.second.back();
+            updateInt[pData.first](*this,
+                (level < pData.second.size()) ? pData.second[level] : pData.second.back());
         }
     }
 }
@@ -959,6 +959,7 @@ void SPSegmentationEngine::IterateInThread(ParallelDeque<Pixel*, Superpixel*>* p
 int SPSegmentationEngine::IterateMoves(int level)
 {
     params.SetLevelParams(level);
+    cout << "appWeight: " << params.appWeight << endl;
 
     ParallelDeque<Pixel*, Superpixel*> list(pixelsImg.rows * pixelsImg.cols);
     int itemCount = 1;

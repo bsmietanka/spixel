@@ -13,7 +13,7 @@ reSteps: 1
 minLevel: 2
 
 # energy weights
-appWeight: [200.0, 100.0]
+appWeight: [200.0, 200., 200.0, 100.0]
 regWeight: 500.0
 lenWeight: 1000.0
 sizeWeight: 1000.0

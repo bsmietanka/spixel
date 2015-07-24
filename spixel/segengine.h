@@ -4,6 +4,11 @@
 #include "structures.h"
 #include "tsdeque.h"
 
+#define ADD_LEVEL_PARAM_DOUBLE(field, node, name) \
+    updateDouble[name] = [](SPSegmentationParameters& params, double val) { params.field = val; };\
+    AddLevelParamFromNodeDouble(node, name);
+
+
 using namespace cv;
 using namespace std;
 
@@ -12,8 +17,8 @@ void UpdateFromNode(int& val, const FileNode& node);
 void UpdateFromNode(bool& val, const FileNode& node);
 
 template <typename T> 
-void AddLevelParamFromNode(T& val, const FileNode& parentNode, const string& nodeName,
-    vector<pair<T*, vector<T>>>& paramsList)
+void AddLevelParamFromNode(const FileNode& parentNode, const string& nodeName,
+    vector<pair<string, vector<T>>>& paramsList)
 {
     FileNode n = parentNode[nodeName];
 
@@ -28,9 +33,7 @@ void AddLevelParamFromNode(T& val, const FileNode& parentNode, const string& nod
             levParams.push_back((T)n1);
         }
     }
-    paramsList.push_back(pair<T*, vector<T>>(&val, levParams));
-    if (!levParams.empty())
-        val = levParams.front();
+    paramsList.push_back(pair<string, vector<T>>(nodeName, levParams));
 }
 
 
@@ -63,8 +66,10 @@ struct SPSegmentationParameters {
                                     // disparity image
     int nThreads = 4;
 
-    vector<pair<double*, vector<double>>> levelParamsDouble;
-    vector<pair<int*, vector<int>>> levelParamsInt;
+    vector<pair<string, vector<double>>> levelParamsDouble;
+    vector<pair<string, vector<int>>> levelParamsInt;
+    map<string, function<void(SPSegmentationParameters&, double)>> updateDouble;
+    map<string, function<void(SPSegmentationParameters&, int)>> updateInt;
 
     void SetLevelParams(int level);
 
@@ -72,15 +77,15 @@ struct SPSegmentationParameters {
     {
         UpdateFromNode(pixelSize, node["pixelSize"]);
         UpdateFromNode(sPixelSize, node["sPixelSize"]);
-        AddLevelParamFromNode(appWeight, node, "appWeight");
-        AddLevelParamFromNode(regWeight, node, "regWeight");
-        AddLevelParamFromNode(lenWeight, node, "lenWeight");
-        AddLevelParamFromNode(sizeWeight, node, "sizeWeight");
-        AddLevelParamFromNode(dispWeight, node, "dispWeight");
-        AddLevelParamFromNode(smoWeight, node, "smoWeight");
-        AddLevelParamFromNode(priorWeight, node, "priorWeight");
-        AddLevelParamFromNode(occPriorWeight, node, "occPriorWeight");
-        AddLevelParamFromNode(hiPriorWeight, node, "hiPriorWeight");
+        ADD_LEVEL_PARAM_DOUBLE(appWeight, node, "appWeight");
+        ADD_LEVEL_PARAM_DOUBLE(regWeight, node, "regWeight");
+        ADD_LEVEL_PARAM_DOUBLE(lenWeight, node, "lenWeight");
+        ADD_LEVEL_PARAM_DOUBLE(sizeWeight, node, "sizeWeight");
+        ADD_LEVEL_PARAM_DOUBLE(dispWeight, node, "dispWeight");
+        ADD_LEVEL_PARAM_DOUBLE(smoWeight, node, "smoWeight");
+        ADD_LEVEL_PARAM_DOUBLE(priorWeight, node, "priorWeight");
+        ADD_LEVEL_PARAM_DOUBLE(occPriorWeight, node, "occPriorWeight");
+        ADD_LEVEL_PARAM_DOUBLE(hiPriorWeight, node, "hiPriorWeight");
         UpdateFromNode(noDisp, node["noDisp"]);
         UpdateFromNode(stereo, node["stereo"]);
         UpdateFromNode(inpaint, node["inpaint"]);
@@ -93,17 +98,19 @@ struct SPSegmentationParameters {
         UpdateFromNode(nThreads, node["nThreads"]);
         UpdateFromNode(peblThreshold, node["peblThreshold"]);
         UpdateFromNode(updateThreshold, node["updateThreshold"]);
+        SetLevelParams(0);
     }
+
 
 private:
-    void AddLevelParamFromNode(double& val, const FileNode& parentNode, const string& nodeName)
+    void AddLevelParamFromNodeDouble(const FileNode& parentNode, const string& nodeName)
     {
-        ::AddLevelParamFromNode(val, parentNode, nodeName, levelParamsDouble);
+        AddLevelParamFromNode<double>(parentNode, nodeName, levelParamsDouble);
     }
 
-    void AddLevelParamFromNode(int& val, const FileNode& parentNode, const string& nodeName)
+    void AddLevelParamFromNodeInt(const FileNode& parentNode, const string& nodeName)
     {
-        ::AddLevelParamFromNode(val, parentNode, nodeName, levelParamsInt);
+        AddLevelParamFromNode<int>(parentNode, nodeName, levelParamsInt);
     }
 
 };
