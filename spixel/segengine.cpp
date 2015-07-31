@@ -550,6 +550,9 @@ void SPSegmentationEngine::UpdateStereoSums()
                     sps->sumIRowD += i*disp; sps->sumIColD += j*disp;
                     sps->sumID += disp;
                     sps->nI++;
+                    CV_Assert(sps->sumIRow >= 0 && sps->sumIRow2 >= 0 && sps->sumICol >= 0 
+                        && sps->sumICol2 >= 0 && sps->sumIRowCol >= 0);
+
                 }
             }
         }

@@ -764,11 +764,11 @@ public:
 
     template<class It, class Pr> void CalcPlaneLeastSquares(It from, It to, Pr pred, const cv::Mat1d& depthImg)
     {
-        int sumIRow = this->sumIRow;
-        int sumICol = this->sumICol;
-        int sumIRow2 = this->sumIRow2;
-        int sumICol2 = this->sumICol2;
-        int sumIRowCol = this->sumIRowCol;
+        double sumIRow = this->sumIRow;
+        double sumICol = this->sumICol;
+        double sumIRow2 = this->sumIRow2;
+        double sumICol2 = this->sumICol2;
+        double sumIRowCol = this->sumIRowCol;
         double sumIRowD = this->sumIRowD;
         double sumIColD = this->sumIColD;
         double sumID = this->sumID;

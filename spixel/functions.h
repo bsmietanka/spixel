@@ -90,8 +90,13 @@ bool Plane3P(const cv::Point3d& p1, const cv::Point3d& p2, const cv::Point3d& p3
 bool RANSACPlane(const vector<cv::Point3d>& pixels, Plane_d& plane);
 void InitSuperpixelPlane(SuperpixelStereo* sp, const cv::Mat1d& depthImg);
 
-void LeastSquaresPlane(int sumIRow, int sumIRow2, int sumICol, int sumICol2, int sumIRowCol, double sumIRowD, double sumIColD,
-    double sumID, int nI, Plane_d& plane);
+void LeastSquaresPlane(double sumIRow, double sumIRow2, double sumICol, double sumICol2, double sumIRowCol, double sumIRowD, double sumIColD,
+    double sumID, double nI, Plane_d& plane);
+
+void LeastSquaresPlaneDebug(const double x1, const double y1, const double z1, const double d1,
+    const double x2, const double y2, const double z2, const double d2,
+    const double x3, const double y3, const double z3, const double d3,
+    Plane_d& plane);
 
 // Equation (8) for superpixel sp
 void CalcDispEnergy(SuperpixelStereo* sp, const cv::Mat1d& dispImg, double noDisp);

@@ -8,6 +8,11 @@
     updateDouble[name] = [](SPSegmentationParameters& params, double val) { params.field = val; };\
     AddLevelParamFromNodeDouble(node, name);
 
+#define ADD_LEVEL_PARAM_INT(field, node, name) \
+    updateInt[name] = [](SPSegmentationParameters& params, int val) { params.field = val; };\
+    AddLevelParamFromNodeInt(node, name);
+
+
 
 using namespace cv;
 using namespace std;
@@ -91,12 +96,12 @@ struct SPSegmentationParameters {
         UpdateFromNode(inpaint, node["inpaint"]);
         UpdateFromNode(instantBoundary, node["instantBoundary"]);
         UpdateFromNode(iterations, node["iterations"]);
-        UpdateFromNode(reSteps, node["reSteps"]);
+        ADD_LEVEL_PARAM_INT(reSteps, node, "reSteps");
         UpdateFromNode(inlierThreshold, node["inlierThreshold"]);
         UpdateFromNode(maxUpdates, node["maxUpdates"]);
         UpdateFromNode(minLevel, node["minLevel"]);
         UpdateFromNode(nThreads, node["nThreads"]);
-        UpdateFromNode(peblThreshold, node["peblThreshold"]);
+        ADD_LEVEL_PARAM_INT(peblThreshold, node, "peblThreshold");
         UpdateFromNode(updateThreshold, node["updateThreshold"]);
         SetLevelParams(0);
     }
