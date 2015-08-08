@@ -65,7 +65,7 @@ private:
 
 // See definition for description
 void MovePixel(Matrix<Pixel>& pixelsImg, PixelMoveData& pmd);
-void MovePixelStereo(Matrix<Pixel>& pixelsImg, PixelMoveData& pmd);
+void MovePixelStereo(Matrix<Pixel>& pixelsImg, PixelMoveData& pmd, bool changeBoundary);
 
 // Return true if superpixel sp is connected in region defined by upper left/lower right corners of pixelsImg
 bool IsSuperpixelRegionConnected(const Matrix<Pixel>& pixelsImg, Pixel* p, int ulr, int ulc, int lrr, int lrc);
@@ -93,10 +93,10 @@ void InitSuperpixelPlane(SuperpixelStereo* sp, const cv::Mat1d& depthImg);
 void LeastSquaresPlane(double sumIRow, double sumIRow2, double sumICol, double sumICol2, double sumIRowCol, double sumIRowD, double sumIColD,
     double sumID, double nI, Plane_d& plane);
 
-void LeastSquaresPlaneDebug(const double x1, const double y1, const double z1, const double d1,
-    const double x2, const double y2, const double z2, const double d2,
-    const double x3, const double y3, const double z3, const double d3,
-    Plane_d& plane);
+//void LeastSquaresPlaneDebug(const double x1, const double y1, const double z1, const double d1,
+//    const double x2, const double y2, const double z2, const double d2,
+//    const double x3, const double y3, const double z3, const double d3,
+//    Plane_d& plane);
 
 // Equation (8) for superpixel sp
 void CalcDispEnergy(SuperpixelStereo* sp, const cv::Mat1d& dispImg, double noDisp);

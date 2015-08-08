@@ -125,4 +125,59 @@ private:
     }
 };
 
+template <typename T> class Deque {
+private:
+    std::vector<T> vector;
+    size_t start;
+    size_t end;
+    size_t listSize;
+public:
+    Deque(size_t maxSize) :
+        start(0), end(0), listSize(0)
+    {
+        vector.resize(maxSize);
+    }
+
+    size_t Size() const { return listSize; }
+
+    bool Empty() const { return listSize == 0; }
+
+    void Clear() { start = end = listSize = 0; }
+
+    void PushBack(const T& value)
+    {
+        if ((end + 1) % vector.size() == start) resize(2 * vector.size());
+        vector[end] = value;
+        end = (end + 1) % vector.size();
+        listSize++;
+    }
+
+    const T& Front() const { return vector[start]; }
+
+    T PopFront() 
+    { 
+        size_t retIndex = start;
+        start = (start + 1) % vector.size(); 
+        listSize--; 
+        return vector[retIndex];
+    }
+
+private:
+    void resize(size_t newSize)
+    {
+        std::vector<T> newVector;
+
+        assert(newSize > vector.size());
+        newVector.resize(newSize);
+        if (start <= end) std::copy(vector.begin() + start, vector.begin() + end, newVector.begin());
+        else {
+            std::copy(vector.begin() + start, vector.end(), newVector.begin());
+            std::copy(vector.begin(), vector.begin() + end, newVector.begin() + vector.size() - start);
+        }
+        std::swap(vector, newVector);
+        start = 0;
+        end = listSize;
+    }
+};
+
 

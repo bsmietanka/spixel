@@ -65,7 +65,7 @@ struct SPSegmentationParameters {
     int reSteps = 5;
     int minLevel = 0;
 
-    bool instantBoundary = true;
+    bool instantBoundary = true;    // Boundary re-estimation on each step of iteration
     bool stereo = false;
     bool inpaint = false;           // use opencv's inpaint method to fill gaps in
                                     // disparity image
@@ -178,6 +178,7 @@ private:
 
     // Parameters
     SPSegmentationParameters params;
+    double planeSmoothWeight = 1;   // Calculated from params in initialization
 
     // Original image to process
     Mat origImg;
@@ -236,7 +237,7 @@ private:
     bool TryMovePixel(Pixel* p, Pixel* q, PixelMoveData& psd);
     bool TryMovePixelStereo(Pixel* p, Pixel* q, PixelMoveData& psd);
 
-    void IterateInThread(ParallelDeque<Pixel*, Superpixel*>* pList);
+    int Iterate(Deque<Pixel*>& list, Matrix<bool>& inList);
 };
 
 

@@ -762,7 +762,7 @@ public:
     void CalcPlaneLeastSquares(const cv::Mat1d& depthImg);
     //void CalcPlaneLeastSquares(SuperpixelStereo* sq, const cv::Mat1d& depthImg);
 
-    template<class It, class Pr> void CalcPlaneLeastSquares(It from, It to, Pr pred, const cv::Mat1d& depthImg)
+    template<class It, class Pr> void CalcPlaneLeastSquares(It from, It to, Pr pred, const cv::Mat1d& depthImg, double weightFactor)
     {
         double sumIRow = this->sumIRow;
         double sumICol = this->sumICol;
@@ -772,20 +772,22 @@ public:
         double sumIRowD = this->sumIRowD;
         double sumIColD = this->sumIColD;
         double sumID = this->sumID;
-        int nI = this->nI;
+        double nI = this->nI;
 
         for (; from != to; ++from) {
             SuperpixelStereo* sq = pred(from);
             if (sq != nullptr) {
-                sumIRow += sq->sumIRow;
-                sumICol += sq->sumICol;
-                sumIRow2 += sq->sumIRow2;
-                sumICol2 += sq->sumICol2;
-                sumIRowCol += sq->sumIRowCol;
-                sumIRowD += sq->sumIRowD;
-                sumIColD += sq->sumIColD;
-                sumID += sq->sumID;
-                nI += sq->nI;
+                double w = weightFactor / (size + sq->size);
+
+                sumIRow += w * sq->sumIRow;
+                sumICol += w * sq->sumICol;
+                sumIRow2 += w * sq->sumIRow2;
+                sumICol2 += w * sq->sumICol2;
+                sumIRowCol += w * sq->sumIRowCol;
+                sumIRowD += w * sq->sumIRowD;
+                sumIColD += w * sq->sumIColD;
+                sumID += w * sq->sumID;
+                nI += w * sq->nI;
             }
         }
         LeastSquaresPlane(sumIRow, sumIRow2, sumICol, sumICol2, sumIRowCol, sumIRowD, sumIColD, sumID, nI, plane);

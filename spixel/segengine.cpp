@@ -345,6 +345,10 @@ void SPSegmentationEngine::InitializeStereo()
     InitializePPImage();
     EstimatePlaneParameters();
     InitializeStereoEnergies();
+
+    double gridSize = sqrt((double)img.rows*img.cols / superpixels.size());
+    planeSmoothWeight = params.smoWeight * gridSize * gridSize / params.dispWeight;
+    //planeSmoothWeight = 0.4 * gridSize * gridSize;
 }
 
 void SPSegmentationEngine::InitializePPImage()
@@ -478,7 +482,8 @@ void SPSegmentationEngine::UpdatePlaneParameters()
             [this](BorderDataMap::const_iterator iter) { 
                 return iter->second.type == BTCo && iter->second.length > params.peblThreshold ? iter->first : nullptr; 
             },
-            depthImg);
+            depthImg,
+            planeSmoothWeight);
         //sp->CalcPlaneLeastSquares(sp->boundaryData.begin(), sp->boundaryData.end(),
         //    [](BorderDataMap::const_iterator iter) { return nullptr; },
         //    depthImg);
@@ -771,18 +776,22 @@ void LockStereo(Pixel*& p, unordered_set<Superpixel*>& toLock, const Matrix<Pixe
 
 static int dbgImageNum = 0;
 
-void SPSegmentationEngine::IterateInThread(ParallelDeque<Pixel*, Superpixel*>* pList)
+int SPSegmentationEngine::Iterate(Deque<Pixel*>& list, Matrix<bool>& inList)
 {
     PixelMoveData tryMoveData[4];
     Superpixel* nbsp[5];
     int nbspSize;
+    int popCount = 0;
 
-    while (!pList->Empty() && pList->GetPopCount() < params.maxUpdates) {
-        Pixel* p = pList->PopAndLock();
+    while (!list.Empty() && popCount < params.maxUpdates) {
+        Pixel* p = list.PopFront();
+
+        popCount++;
 
         if (p == nullptr) 
             continue;
         
+        inList(p->row, p->col) = false;
         nbsp[0] = p->superPixel;
         nbspSize = 1;
         for (int m = 0; m < 4; m++) {
@@ -819,12 +828,12 @@ void SPSegmentationEngine::IterateInThread(ParallelDeque<Pixel*, Superpixel*>* p
                 //sps->CheckRegEnergy();
                 //sps->CheckAppEnergy(img);
 
-                double delta = TotalEnergyDelta(params, bestMoveData);
+                //double delta = TotalEnergyDelta(params, bestMoveData);
 
                 //if (performanceInfo.levelMaxEDelta[level] < delta)
                 //    performanceInfo.levelMaxEDelta[level] = delta;
 
-                MovePixelStereo(pixelsImg, *bestMoveData);
+                MovePixelStereo(pixelsImg, *bestMoveData, params.instantBoundary);
 
                 //char fname[1000];
                 //sprintf(fname, "c:\\tmp\\dbgbound-%03d.png", dbgImageNum++);
@@ -844,16 +853,17 @@ void SPSegmentationEngine::IterateInThread(ParallelDeque<Pixel*, Superpixel*>* p
                 MovePixel(pixelsImg, *bestMoveData);
             }
 
-            pList->PushBack(p);
+            list.PushBack(p);
             for (int m = 0; m < 4; m++) {
                 Pixel* qq = PixelAt(pixelsImg, p->row + nDeltas[m][0], p->col + nDeltas[m][1]);
-                if (qq != nullptr && p->superPixel != qq->superPixel)
-                    pList->PushBack(qq);
+                if (qq != nullptr && p->superPixel != qq->superPixel && !inList(qq->row, qq->col)) {
+                    list.PushBack(qq);
+                    inList(qq->row, qq->col) = true;
+                }
             }
         }
-
-        pList->Release(p);
     }
+    return popCount;
 }
 
 // Returns number of iterations
@@ -964,17 +974,11 @@ int SPSegmentationEngine::IterateMoves(int level)
     params.SetLevelParams(level);
     cout << "appWeight: " << params.appWeight << endl;
 
-    ParallelDeque<Pixel*, Superpixel*> list(pixelsImg.rows * pixelsImg.cols);
-    int itemCount = 1;
-
-    list.SetEmptyVal(nullptr);
-    if (params.stereo) {
-        list.SetLockFunction([&](Pixel*& p, unordered_set<Superpixel*>& forb) { LockStereo(p, forb, pixelsImg); });
-    } else {
-        list.SetLockFunction([&](Pixel*& p, unordered_set<Superpixel*>& forb) { LockNonStereo(p, forb, pixelsImg); });
-    }
+    Deque<Pixel*> list(pixelsImg.rows * pixelsImg.cols);
+    Matrix<bool> inList(pixelsImg.rows, pixelsImg.cols);
 
     // Initialize pixel (block) border list 
+    fill(inList.begin(), inList.end(), false);
     for (Pixel& p : pixelsImg) {
         Pixel* q;
 
@@ -982,19 +986,15 @@ int SPSegmentationEngine::IterateMoves(int level)
             q = PixelAt(pixelsImg, p.row + nDeltas[m][0], p.col + nDeltas[m][1]);
             if (q != nullptr && p.superPixel != q->superPixel) {
                 list.PushBack(&p);
+                inList(q->row, q->col) = true;
                 break;
             }
         }
     }
 
-    thread threads[1];
+    int nIterations = Iterate(list, inList);
 
-    for (int ti = 0; ti < 1; ti++) {
-        threads[ti] = thread([&](ParallelDeque<Pixel*, Superpixel*>* pList) { IterateInThread(pList); }, &list);
-    }
-    for (auto& t : threads) { t.join(); }
-
-    return list.GetPopCount();
+    return nIterations;
 }
 
 Mat SPSegmentationEngine::GetSegmentedImage()
@@ -1360,7 +1360,7 @@ bool SPSegmentationEngine::TryMovePixelStereo(Pixel* p, Pixel* q, PixelMoveData&
     p->CalcPixelDataStereo(img, depthImg, sp->plane, sq->plane, params.inlierThreshold, params.noDisp, pd);
     sp->GetRemovePixelDataStereo(pd, pcd);
     sq->GetAddPixelDataStereo(pd, qcd);
-    CalcBorderChangeDataStereo(pixelsImg, depthImg, params, p, q, psd.bDataP, psd.bDataQ, psd.prem);
+    if (params.instantBoundary) CalcBorderChangeDataStereo(pixelsImg, depthImg, params, p, q, psd.bDataP, psd.bDataQ, psd.prem);
     CalcSuperpixelBoundaryLength(pixelsImg, p, sp, sq, spbl, sqbl, sobl);
 
     psd.p = p;
@@ -1372,12 +1372,10 @@ bool SPSegmentationEngine::TryMovePixelStereo(Pixel* p, Pixel* q, PixelMoveData&
     psd.bLenDelta = sqbl - spbl;
     psd.eDispDelta = spEDisp + sqEDisp - pcd.newEDisp - qcd.newEDisp;
     psd.ePriorDelta = 0;
-    psd.eSmoDelta = spESmo + sqESmo - GetSmoEnergy(psd.bDataP, sp, psd.pSize, sq, psd.qSize) -
-        GetSmoEnergy(psd.bDataQ, sq, psd.qSize, sp, psd.pSize);
+    psd.eSmoDelta = (!params.instantBoundary) ? 0.0 : (spESmo + sqESmo - GetSmoEnergy(psd.bDataP, sp, psd.pSize, sq, psd.qSize) -
+        GetSmoEnergy(psd.bDataQ, sq, psd.qSize, sp, psd.pSize));
     psd.allowed = true;
     psd.pixelData = pd;
-    //psd.bDataP =
-    //psd.bDataQ =
     return true;
 }
 

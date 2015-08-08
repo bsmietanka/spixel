@@ -240,28 +240,30 @@ void MovePixel(Matrix<Pixel>& pixelsImg, PixelMoveData& pmd)
 
 }
 
-void MovePixelStereo(Matrix<Pixel>& pixelsImg, PixelMoveData& pmd)
+void MovePixelStereo(Matrix<Pixel>& pixelsImg, PixelMoveData& pmd, bool changeBoundary)
 {
-    SuperpixelStereo* sp = (SuperpixelStereo*)pmd.p->superPixel;
-    SuperpixelStereo* sq = (SuperpixelStereo*)pmd.q->superPixel;
-
     MovePixel(pixelsImg, pmd);
 
-    // Update boundary
-    std::swap(sp->boundaryData, pmd.bDataP);
-    std::swap(sq->boundaryData, pmd.bDataQ);
+    if (changeBoundary) {
+        SuperpixelStereo* sp = (SuperpixelStereo*)pmd.p->superPixel;
+        SuperpixelStereo* sq = (SuperpixelStereo*)pmd.q->superPixel;
 
-    // Update neighboring boundaries
-    for (auto& bdIter : sp->boundaryData) {
-        if (bdIter.first != sq) bdIter.first->boundaryData[sp] = bdIter.second;
-    }
-    for (auto& bdIter : sq->boundaryData) {
-        if (bdIter.first != sp) bdIter.first->boundaryData[sq] = bdIter.second;
-    }
+        // Update boundary
+        std::swap(sp->boundaryData, pmd.bDataP);
+        std::swap(sq->boundaryData, pmd.bDataQ);
 
-    // Remove neighborhood data of sp, if any
-    for (SuperpixelStereo* sr : pmd.prem) {
-        sr->boundaryData.erase(sp);
+        // Update neighboring boundaries
+        for (auto& bdIter : sp->boundaryData) {
+            if (bdIter.first != sq) bdIter.first->boundaryData[sp] = bdIter.second;
+        }
+        for (auto& bdIter : sq->boundaryData) {
+            if (bdIter.first != sp) bdIter.first->boundaryData[sq] = bdIter.second;
+        }
+
+        // Remove neighborhood data of sp, if any
+        for (SuperpixelStereo* sr : pmd.prem) {
+            sr->boundaryData.erase(sp);
+        }
     }
 
 }
@@ -512,12 +514,12 @@ void LeastSquaresPlane(double sumIRow, double sumIRow2, double sumICol, double s
         plane.y = result(1, 0);
         plane.z = result(2, 0);
 
-        Plane_d dbgPlane;
+        //Plane_d dbgPlane;
 
-        LeastSquaresPlaneDebug(sumIRow2, sumIRowCol, sumIRow, sumIRowD, sumIRowCol, sumICol2,
-            sumICol, sumIColD, sumIRow, sumICol, nI, sumID, dbgPlane);
-        double d = norm(dbgPlane - plane);
-        CV_Assert(d < 0.001);
+        //LeastSquaresPlaneDebug(sumIRow2, sumIRowCol, sumIRow, sumIRowD, sumIRowCol, sumICol2,
+        //    sumICol, sumIColD, sumIRow, sumICol, nI, sumID, dbgPlane);
+        //double d = norm(dbgPlane - plane);
+        //CV_Assert(d < 0.001);
 
     } else {
 
@@ -526,37 +528,37 @@ void LeastSquaresPlane(double sumIRow, double sumIRow2, double sumICol, double s
 
 }
 
-void LeastSquaresPlaneDebug(const double x1, const double y1, const double z1, const double d1,
-    const double x2, const double y2, const double z2, const double d2,
-    const double x3, const double y3, const double z3, const double d3,
-    Plane_d& plane)
-{
-    const double epsilonValue = 1e-10;
-
-    double denominatorA = (x1*z2 - x2*z1)*(y2*z3 - y3*z2) - (x2*z3 - x3*z2)*(y1*z2 - y2*z1);
-    if (denominatorA < epsilonValue) {
-        plane.x = 0.0;
-        plane.y = 0.0;
-        plane.z = -1.0;
-        return;
-    }
-
-    plane.x = ((z2*d1 - z1*d2)*(y2*z3 - y3*z2) - (z3*d2 - z2*d3)*(y1*z2 - y2*z1)) / denominatorA;
-
-    double denominatorB = y1*z2 - y2*z1;
-    if (denominatorB > epsilonValue) {
-        plane.y = (z2*d1 - z1*d2 - plane.x * (x1*z2 - x2*z1)) / denominatorB;
-    } else {
-        denominatorB = y2*z3 - y3*z2;
-        plane.y = (z3*d2 - z2*d3 - plane.x * (x2*z3 - x3*z2)) / denominatorB;
-    }
-    if (z1 > epsilonValue) {
-        plane.z = (d1 - plane.x * x1 - plane.y * y1) / z1;
-    } else if (z2 > epsilonValue) {
-        plane.z = (d2 - plane.x * x2 - plane.y * y2) / z2;
-    } else {
-        plane.z = (d3 - plane.x * x3 - plane.y * y3) / z3;
-    }
-}
+//void LeastSquaresPlaneDebug(const double x1, const double y1, const double z1, const double d1,
+//    const double x2, const double y2, const double z2, const double d2,
+//    const double x3, const double y3, const double z3, const double d3,
+//    Plane_d& plane)
+//{
+//    const double epsilonValue = 1e-10;
+//
+//    double denominatorA = (x1*z2 - x2*z1)*(y2*z3 - y3*z2) - (x2*z3 - x3*z2)*(y1*z2 - y2*z1);
+//    if (denominatorA < epsilonValue) {
+//        plane.x = 0.0;
+//        plane.y = 0.0;
+//        plane.z = -1.0;
+//        return;
+//    }
+//
+//    plane.x = ((z2*d1 - z1*d2)*(y2*z3 - y3*z2) - (z3*d2 - z2*d3)*(y1*z2 - y2*z1)) / denominatorA;
+//
+//    double denominatorB = y1*z2 - y2*z1;
+//    if (denominatorB > epsilonValue) {
+//        plane.y = (z2*d1 - z1*d2 - plane.x * (x1*z2 - x2*z1)) / denominatorB;
+//    } else {
+//        denominatorB = y2*z3 - y3*z2;
+//        plane.y = (z3*d2 - z2*d3 - plane.x * (x2*z3 - x3*z2)) / denominatorB;
+//    }
+//    if (z1 > epsilonValue) {
+//        plane.z = (d1 - plane.x * x1 - plane.y * y1) / z1;
+//    } else if (z2 > epsilonValue) {
+//        plane.z = (d2 - plane.x * x2 - plane.y * y2) / z2;
+//    } else {
+//        plane.z = (d3 - plane.x * x3 - plane.y * y3) / z3;
+//    }
+//}
 
 
