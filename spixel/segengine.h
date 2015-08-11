@@ -226,6 +226,7 @@ private:
     bool SplitPixels();
     void Reset();
     void UpdateBoundaryData();
+    void UpdateBoundaryData2();
     void UpdatePlaneParameters();
     void UpdateStereoSums();
     void UpdateDispSums();

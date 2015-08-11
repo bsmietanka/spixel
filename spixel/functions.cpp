@@ -58,6 +58,30 @@ template<typename T> int Patch3x3ToBits(const Matrix<T>& m, int ulr, int ulc, co
     return patch;
 }
 
+int Patch3x3ToBits(const Matrix<Pixel>& m, int ulr, int ulc, Pixel* p)
+{
+    int patch = 0;
+    int bit = 1;
+    const Pixel* q;
+
+    for (int r = ulr; r < ulr + 3; r++) {
+        if (r >= m.rows)
+            break;
+        if (r < 0) {
+            bit <<= 3;
+        } else {
+            for (int c = ulc; c < ulc + 3; c++) {
+                if (c >= 0 && c < m.cols) {
+                    q = m.PtrTo(r, c);
+                    if (p != q && q->superPixel == p->superPixel) patch |= bit;
+                }
+                bit <<= 1;
+            }
+        }
+    }
+    return patch;
+}
+
 
 ConnectivityCache::ConnectivityCache()
 {
@@ -315,7 +339,7 @@ bool IsSuperpixelRegionConnectedOptimized(const Matrix<Pixel>& pixelsImg, Pixel*
 {
     CV_DbgAssert(ulr + 3 == lrr && ulc + 3 == lrc);
 
-    int bits = Patch3x3ToBits<Pixel>(pixelsImg, ulr, ulc, [&p](const Pixel* q) { return p != q && q->superPixel == p->superPixel; });
+    int bits = Patch3x3ToBits(pixelsImg, ulr, ulc, p);
 
     return connectivityCache.IsConnected(bits);
 }

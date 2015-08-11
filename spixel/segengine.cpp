@@ -589,7 +589,6 @@ void SPSegmentationEngine::UpdateDispSums()
     }
 }
 
-
 // Called in initialization and in re-estimation between layers.
 void SPSegmentationEngine::UpdateBoundaryData()
 {
@@ -634,6 +633,85 @@ void SPSegmentationEngine::UpdateBoundaryData()
     for (Superpixel* s : superpixels) {
         SuperpixelStereo* sp = (SuperpixelStereo*)s;
         
+        for (auto& bdIter : sp->boundaryData) {
+            BInfo& bInfo = bdIter.second;
+            SuperpixelStereo* sq = bdIter.first;
+            double eSmoCoSum;
+            int eSmoCoCount;
+            double eSmoHiSum = bInfo.hiSum;
+            double eSmoOcc = 1; // Phi!?
+
+            CalcCoSmoothnessSum(depthImg, params.inlierThreshold, sp, sq, bInfo.coSum, bInfo.coCount);
+            eSmoCoSum = bInfo.coSum;
+            eSmoCoCount = bInfo.coCount;
+
+            //double eHi = params.smoWeight*eSmoHiSum / item.second.bSize + params.priorWeight*params.hiPriorWeight;
+            //double eCo = params.smoWeight*eSmoCoSum / (sp->GetSize() + sq->GetSize());
+            //double eOcc = params.smoWeight*eSmoOcc + params.priorWeight*params.occPriorWeight;
+            double eHi = bInfo.hiCount == 0 ? HUGE_VAL : (eSmoHiSum / bInfo.hiCount + params.hiPriorWeight);
+            double eCo = eSmoCoCount == 0 ? HUGE_VAL : (eSmoCoSum / eSmoCoCount); //(sp->GetSize() + sq->GetSize()); // + 0
+            double eOcc = params.occPriorWeight;
+
+            if (eCo <= eHi && eCo < eOcc) {
+                bInfo.type = BTCo;
+                bInfo.typePrior = 0;
+            } else if (eHi <= eOcc && eHi <= eCo) {
+                bInfo.type = BTHi;
+                bInfo.typePrior = params.hiPriorWeight;
+            } else {
+                bInfo.type = BTLo;
+                bInfo.typePrior = params.occPriorWeight;
+            }
+        }
+    }
+
+}
+
+// Called in initialization and in re-estimation between layers.
+// Version which does not check for inliers.
+void SPSegmentationEngine::UpdateBoundaryData2()
+{
+    const int directions[2][3] = { { 0, 1, BLeftFlag }, { 1, 0, BTopFlag } };
+
+    // clear neighbors
+    for (Superpixel* sp : superpixels) {
+        SuperpixelStereo* sps = (SuperpixelStereo*)sp;
+        sps->boundaryData.clear();
+    }
+
+    // update length & hiSum (written to smoSum)
+    for (Pixel& p : pixelsImg) {
+        SuperpixelStereo* sp = (SuperpixelStereo*)p.superPixel;
+
+        for (int dir = 0; dir < 2; dir++) {
+            Pixel* q = PixelAt(pixelsImg, p.row + directions[dir][0], p.col + directions[dir][1]);
+
+            if (q != nullptr) {
+                SuperpixelStereo* sq = (SuperpixelStereo*)q->superPixel;
+
+                if (q->superPixel != sp) {
+                    BInfo& bdpq = sp->boundaryData[sq];
+                    BInfo& bdqp = sq->boundaryData[sp];
+                    double sum;
+                    int size;
+                    int length;
+
+                    q->CalcHiSmoothnessSumEI(directions[dir][2], depthImg, params.inlierThreshold, sp->plane, sq->plane, sum, size, length);
+                    bdpq.hiCount += size;
+                    bdpq.hiSum += sum;
+                    bdpq.length += length;
+                    bdqp.hiCount += size;
+                    bdqp.hiSum += sum;
+                    bdqp.length += length;
+                }
+            }
+        }
+    }
+
+    //#pragma omp parallel
+    for (Superpixel* s : superpixels) {
+        SuperpixelStereo* sp = (SuperpixelStereo*)s;
+
         for (auto& bdIter : sp->boundaryData) {
             BInfo& bInfo = bdIter.second;
             SuperpixelStereo* sq = bdIter.first;

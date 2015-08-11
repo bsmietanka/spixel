@@ -277,14 +277,14 @@ void SuperpixelStereo::CheckAppEnergy(const cv::Mat& img)
 
 void SuperpixelStereo::CheckRegEnergy()
 {
-    double rr = 0, rr2 = 0, cc = 0, cc2 = 0;
+    double rr = 0, rr2 = 0, cc = 0, cc2 = 0, rrcc = 0;
 
     for (Pixel* p : pixels) {
-        double r = 0, r2 = 0, c = 0, c2 = 0;
-        p->CalcRowColSum(r, r2, c, c2);
-        rr += r; rr2 += r2; cc += c; cc2 += c2;
+        double r = 0, r2 = 0, c = 0, c2 = 0, rc = 0;
+        p->CalcRowColSum(r, r2, c, c2, rc);
+        rr += r; rr2 += r2; cc += c; cc2 += c2; rrcc += rc;
     }
-    if (fabs(rr - sumRow) > 0.01 || fabs(rr2 - sumRow2) > 0.01 || fabs(cc - sumCol) > 0.01 || fabs(cc2 - sumCol2) > 0.01) {
+    if (fabs(rr - sumRow) > 0.01 || fabs(rr2 - sumRow2) > 0.01 || fabs(cc - sumCol) > 0.01 || fabs(cc2 - sumCol2) > 0.01 || fabs(rrcc - sumRowCol) > 0.01) {
         cout << "colrow sum mismatch";
     }
     if (fabs(eReg - CalcRegEnergy(sumRow, sumCol, sumRow2, sumCol2, size, numP)) > 0.01) {

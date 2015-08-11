@@ -161,6 +161,7 @@ class SuperpixelStereo;
 struct PixelData {
     Pixel* p;
     double sumRow, sumCol;
+    double sumRowCol;
     double sumRow2, sumCol2;
     double sumR, sumG, sumB;
     double sumR2, sumG2, sumB2;
@@ -223,13 +224,15 @@ struct Pixel { // : public custom_alloc {
         superPixel = nullptr;
     }
 
-    void CalcRowColSum(double& sumRow, double& sumRow2, double& sumCol, double& sumCol2) const
+    void CalcRowColSum(double& sumRow, double& sumRow2, double& sumCol, double& sumCol2, double& sumRowCol) const
     {
         sumRow = 0.0; sumRow2 = 0.0;
         sumCol = 0.0; sumCol2 = 0.0;
+        sumRowCol = 0.0;
         for (int i = ulr; i < (int)lrr; i++) {
             for (int j = ulc; j < (int)lrc; j++) {
                 sumRow += i; sumCol += j;
+                sumRowCol += i*j;
                 sumRow2 += i*i; sumCol2 += j*j;
                 if (sumCol2 < 0) {
                     exit(0);
@@ -459,7 +462,7 @@ struct Pixel { // : public custom_alloc {
     inline void CalcPixelData(const cv::Mat& img, PixelData& pd)
     {
         pd.p = this;
-        CalcRowColSum(pd.sumRow, pd.sumRow2, pd.sumCol, pd.sumCol2);
+        CalcRowColSum(pd.sumRow, pd.sumRow2, pd.sumCol, pd.sumCol2, pd.sumRowCol);
         CalcRGBSum(img, pd.sumR, pd.sumR2, pd.sumG, pd.sumG2, pd.sumB, pd.sumB2);
         pd.size = GetSize();
     }
@@ -538,6 +541,7 @@ public:
     int id;                                 // id (index) of superpixel
     int borderLength = 0;                   // length of border (in img pixels)
     double sumRow = 0, sumCol = 0;          // sum of row, column indices
+    double sumRowCol = 0;                   // sum of row * column indices
     double sumRow2 = 0, sumCol2 = 0;        // sum or row, column squares of indices
     double sumR = 0, sumG = 0, sumB = 0;    // sum of colors
     double sumR2 = 0, sumG2 = 0, sumB2 = 0; // sum of squares of colors
@@ -557,6 +561,7 @@ public:
     {
         sumRow += pd.sumRow;
         sumCol += pd.sumCol;
+        sumRowCol += pd.sumRowCol;
         sumRow2 += pd.sumRow2;
         sumCol2 += pd.sumCol2;
         sumR += pd.sumR;
@@ -621,6 +626,7 @@ public:
     {
         sumRow -= pd.sumRow;
         sumCol -= pd.sumCol;
+        sumRowCol -= pd.sumRowCol;
         sumRow2 -= pd.sumRow2;
         sumCol2 -= pd.sumCol2;
         sumR -= pd.sumR;
