@@ -420,6 +420,53 @@ struct Pixel { // : public custom_alloc {
         }
     }
 
+    void CalcHiSmoothnessSumEI2(byte sideFlag,
+        const Plane_d& planep, const Plane_d& planeq,
+        double& sum, int& count, int& length) const
+    {
+        sum = 0.0;
+        count = 0;
+        length = 0;
+
+        if (sideFlag == BLeftFlag) {
+            for (int i = ulr; i < (int)lrr; i++) {
+                double pdp = DotProduct(planep, i, ulc, 1.0);
+                double qdp = DotProduct(planeq, i, ulc, 1.0);
+
+                sum += Sqr(pdp - qdp);
+                count++;
+            }
+            length = lrr - ulr;
+        } else if (sideFlag == BRightFlag) {
+            for (int i = ulr; i < (int)lrr; i++) {
+                double pdp = DotProduct(planep, i, lrc - 1, 1.0);
+                double qdp = DotProduct(planeq, i, lrc - 1, 1.0);
+
+                sum += Sqr(pdp - qdp);
+                count++;
+            }
+            length = lrr - ulr;
+        } else if (sideFlag == BTopFlag) {
+            for (int j = ulc; j < (int)lrc; j++) {
+                double pdp = DotProduct(planep, ulr, j, 1.0);
+                double qdp = DotProduct(planeq, ulr, j, 1.0);
+
+                sum += Sqr(pdp - qdp);
+                count++;
+            }
+            length = lrc - ulc;
+        } else if (sideFlag == BTopFlag) {
+            for (int j = ulc; j < (int)lrc; j++) {
+                double pdp = DotProduct(planep, lrr - 1, j, 1.0);
+                double qdp = DotProduct(planeq, lrr - 1, j, 1.0);
+
+                sum += Sqr(pdp - qdp);
+                count++;
+            }
+            length = lrc - ulc;
+        }
+    }
+
     void AddToCoSmoothnessSum(const cv::Mat1d& depthImg, double inlierThresh, const Plane_d& planep, const Plane_d& planeq, double& sum, int& count) const
     {
         for (int i = ulr; i < (int)lrr; i++) {
@@ -694,9 +741,9 @@ public:
 class SuperpixelStereo : public Superpixel {
 public:
     double sumDisp = 0.0;
-    int sumIRow = 0, sumICol = 0;         // Sum of terms computed for inlier points
-    int sumIRow2 = 0, sumICol2 = 0;
-    int sumIRowCol = 0;
+    double sumIRow = 0, sumICol = 0;         // Sum of terms computed for inlier points
+    double sumIRow2 = 0, sumICol2 = 0;
+    double sumIRowCol = 0;
     double sumIRowD = 0.0, sumIColD = 0.0;
     double sumID = 0.0;
     int nI = 0;

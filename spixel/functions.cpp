@@ -505,6 +505,30 @@ void CalcCoSmoothnessSum(const cv::Mat1d& depthImg, double inlierThresh, Superpi
     }
 }
 
+void AddToCoSmoothnessSum(SuperpixelStereo* sp, const Plane_d& planeq, double& eSmo)
+{
+    double ppx = sp->plane.x, ppy = sp->plane.y, ppz = sp->plane.z;
+    double qpx = planeq.x, qpy = planeq.y, qpz = planeq.z;
+
+    eSmo = Sqr(ppz - qpz)*sp->size;
+    eSmo += 2 * (ppx - qpx)*(ppz - qpz)*sp->sumRow + Sqr(ppx - qpx) * sp->sumRow2;
+    eSmo += 2 * (ppy - qpy)*(ppz - qpz)*sp->sumCol + Sqr(ppy - qpy) * sp->sumCol2;
+    eSmo += 2 * (ppx - qpx)*(ppy - qpy)*sp->sumRowCol;
+}
+
+
+void CalcCoSmoothnessSum2(SuperpixelStereo* sp, SuperpixelStereo* sq, double& eSmo, int& count)
+{
+    eSmo = 0;
+    count = sp->size + sq->size;
+
+    if (count > 0) {
+        AddToCoSmoothnessSum(sp, sq->plane, eSmo);
+        AddToCoSmoothnessSum(sq, sp->plane, eSmo);
+    }
+}
+
+
 /*
 void CalcBTEnergy(SuperpixelStereo* sp, SuperpixelStereo* sq, double occWeight, double hingeWeight,
     double& ePrior, double& eSmo)

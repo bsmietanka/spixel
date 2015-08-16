@@ -37,6 +37,7 @@ inlierThreshold: 3
 peblThreshold: [20, 30, 10, 10]
 updateThreshold: 0.01
 instantBoundary: 0
+debugOutput: 0
 
 # best values:
 #   dispWeight: 4000.0
@@ -46,7 +47,6 @@ instantBoundary: 0
 #   hiPriorWeight: 0.5
 #   inlierThreshold: 3
 
-nThreads: 1
 
 
 

@@ -65,11 +65,11 @@ struct SPSegmentationParameters {
     int reSteps = 5;
     int minLevel = 0;
 
-    bool instantBoundary = true;    // Boundary re-estimation on each step of iteration
+    bool instantBoundary = false;   // Boundary re-estimation on each step of iteration
     bool stereo = false;
     bool inpaint = false;           // use opencv's inpaint method to fill gaps in
                                     // disparity image
-    int nThreads = 4;
+    bool debugOutput = false;
 
     vector<pair<string, vector<double>>> levelParamsDouble;
     vector<pair<string, vector<int>>> levelParamsInt;
@@ -100,9 +100,9 @@ struct SPSegmentationParameters {
         UpdateFromNode(inlierThreshold, node["inlierThreshold"]);
         UpdateFromNode(maxUpdates, node["maxUpdates"]);
         UpdateFromNode(minLevel, node["minLevel"]);
-        UpdateFromNode(nThreads, node["nThreads"]);
         ADD_LEVEL_PARAM_INT(peblThreshold, node, "peblThreshold");
         UpdateFromNode(updateThreshold, node["updateThreshold"]);
+        UpdateFromNode(debugOutput, node["debugOutput"]);
         SetLevelParams(0);
     }
 
@@ -122,13 +122,6 @@ private:
 
 static void read(const FileNode& node, SPSegmentationParameters& x, const SPSegmentationParameters& defaultValue = SPSegmentationParameters());
 
-typedef pair<SuperpixelStereo*, SuperpixelStereo*> SPSPair;
-
-
-inline SPSPair OrderedPair(SuperpixelStereo* sp, SuperpixelStereo* sq)
-{
-    return sp < sq ? SPSPair(sp, sq) : SPSPair(sq, sp);
-}
 
 class BInfoMatrix  {
 private:
@@ -192,10 +185,8 @@ private:
 
     // Support structures
     Matrix<Pixel> pixelsImg;    // pixels matrix, dimension varies, depends on level
-    //Mat1b inliers;              // boolean matrix of "inliers" (for stereo)
     Matrix<Pixel*> ppImg;       // matrix of dimension of img, pointers to pixelsImg pixels (for stereo)
     vector<Superpixel*> superpixels;
-    //map<SPSPair, BInfo> boundaryData;
 public:
     SPSegmentationEngine(SPSegmentationParameters params, Mat img, Mat depthImg = Mat());
     virtual ~SPSegmentationEngine();

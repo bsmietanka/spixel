@@ -372,7 +372,6 @@ void SPSegmentationEngine::Reset()
     }
 }
 
-// Returns time spent (in seconds)
 void SPSegmentationEngine::ProcessImage()
 {
     Timer t0;
@@ -421,23 +420,14 @@ void SPSegmentationEngine::ProcessImageStereo()
     bool splitted;
     int level = ceil(log2(params.pixelSize));
 
-    //imwrite("c:\\tmp\\a--.png", this->GetSegmentedImage());
-
     do {
         Timer t2;
         performanceInfo.levelIterations.push_back(0);
         for (int iteration = 0; iteration < params.iterations; iteration++) {
             int iters = IterateMoves(level);
-
-            //imwrite(Format("c:\\tmp\\dbgdisp-%d-I.png", level), GetSegmentedImage());
-
-            //stringstream ss;
-            //ss << levelCount;
-            //imwrite("c:\\tmp\\a-" + ss.str() + ".png", this->GetSegmentedImage());
             if (iters > performanceInfo.levelIterations.back())
                 performanceInfo.levelIterations.back() = iters;
             ReEstimatePlaneParameters();
-            //imwrite(Format("c:\\tmp\\dbgdisp-%d-R.png", level), GetSegmentedImage());
         }
         splitted = SplitPixels();
         level--;
@@ -456,7 +446,7 @@ void SPSegmentationEngine::ReEstimatePlaneParameters()
 {
     for (int s = 0; s < params.reSteps; s++) {
         UpdatePlaneParameters();
-        UpdateBoundaryData();
+        UpdateBoundaryData2();
     }
     UpdateDispSums();
 }
@@ -464,6 +454,8 @@ void SPSegmentationEngine::ReEstimatePlaneParameters()
 void SPSegmentationEngine::UpdatePlaneParameters()
 {
     UpdateStereoSums();
+
+    //#pragma omp parallel for
     for (int i = 0; i < superpixels.size(); i++) {
         SuperpixelStereo* sp = (SuperpixelStereo*)superpixels[i];
         bool updated = false;
@@ -668,7 +660,7 @@ void SPSegmentationEngine::UpdateBoundaryData()
 }
 
 // Called in initialization and in re-estimation between layers.
-// Version which does not check for inliers.
+// Version which *does not* check for inliers.
 void SPSegmentationEngine::UpdateBoundaryData2()
 {
     const int directions[2][3] = { { 0, 1, BLeftFlag }, { 1, 0, BTopFlag } };
@@ -696,7 +688,7 @@ void SPSegmentationEngine::UpdateBoundaryData2()
                     int size;
                     int length;
 
-                    q->CalcHiSmoothnessSumEI(directions[dir][2], depthImg, params.inlierThreshold, sp->plane, sq->plane, sum, size, length);
+                    q->CalcHiSmoothnessSumEI2(directions[dir][2], sp->plane, sq->plane, sum, size, length);
                     bdpq.hiCount += size;
                     bdpq.hiSum += sum;
                     bdpq.length += length;
@@ -720,7 +712,7 @@ void SPSegmentationEngine::UpdateBoundaryData2()
             double eSmoHiSum = bInfo.hiSum;
             double eSmoOcc = 1; // Phi!?
 
-            CalcCoSmoothnessSum(depthImg, params.inlierThreshold, sp, sq, bInfo.coSum, bInfo.coCount);
+            CalcCoSmoothnessSum2(sp, sq, bInfo.coSum, bInfo.coCount);
             eSmoCoSum = bInfo.coSum;
             eSmoCoCount = bInfo.coCount;
 
@@ -1050,7 +1042,7 @@ int SPSegmentationEngine::Iterate(Deque<Pixel*>& list, Matrix<bool>& inList)
 int SPSegmentationEngine::IterateMoves(int level)
 {
     params.SetLevelParams(level);
-    cout << "appWeight: " << params.appWeight << endl;
+    if (params.debugOutput) cout << "appWeight: " << params.appWeight << endl;
 
     Deque<Pixel*> list(pixelsImg.rows * pixelsImg.cols);
     Matrix<bool> inList(pixelsImg.rows, pixelsImg.cols);
@@ -1304,35 +1296,39 @@ int SPSegmentationEngine::GetNoOfSuperpixels() const
 
 void SPSegmentationEngine::PrintPerformanceInfo()
 {
-    cout << "Initialization time: " << performanceInfo.init << " sec." << endl;
-    cout << "Ransac time: " << performanceInfo.ransac << " sec." << endl;
-    cout << "Time of image processing: " << performanceInfo.imgproc << " sec." << endl;
-    cout << "Total time: " << performanceInfo.total << " sec." << endl;
-    cout << "Times for each level (in sec.): ";
-    for (double& t : performanceInfo.levelTimes)
-        cout << t << ' ';
-    cout << endl;
-    cout << "Max energy deltaa for each level: ";
-    for (double& t : performanceInfo.levelMaxEDelta)
-        cout << t << ' ';
-    cout << endl;
-    for (int& c : performanceInfo.levelIterations)
-        cout << c << ' ';
-    cout << endl;
+    if (!params.debugOutput) {
+        cout << "Total time: " << performanceInfo.total << " sec." << endl;
+    } else {
+        cout << "Initialization time: " << performanceInfo.init << " sec." << endl;
+        cout << "Ransac time: " << performanceInfo.ransac << " sec." << endl;
+        cout << "Time of image processing: " << performanceInfo.imgproc << " sec." << endl;
+        cout << "Total time: " << performanceInfo.total << " sec." << endl;
+        cout << "Times for each level (in sec.): ";
+        for (double& t : performanceInfo.levelTimes)
+            cout << t << ' ';
+        cout << endl;
+        cout << "Max energy deltaa for each level: ";
+        for (double& t : performanceInfo.levelMaxEDelta)
+            cout << t << ' ';
+        cout << endl;
+        for (int& c : performanceInfo.levelIterations)
+            cout << c << ' ';
+        cout << endl;
 
-    int minBDSize = INT_MAX;
-    int maxBDSize = 0;
+        int minBDSize = INT_MAX;
+        int maxBDSize = 0;
 
-    if (params.stereo) {
-        for (Superpixel* sp : superpixels) {
-            SuperpixelStereo* sps = (SuperpixelStereo*)sp;
-            if (minBDSize > sps->boundaryData.size())
-                minBDSize = sps->boundaryData.size();
-            if (maxBDSize < sps->boundaryData.size())
-                maxBDSize = sps->boundaryData.size();
+        if (params.stereo) {
+            for (Superpixel* sp : superpixels) {
+                SuperpixelStereo* sps = (SuperpixelStereo*)sp;
+                if (minBDSize > sps->boundaryData.size())
+                    minBDSize = sps->boundaryData.size();
+                if (maxBDSize < sps->boundaryData.size())
+                    maxBDSize = sps->boundaryData.size();
+            }
+            cout << "Max boundary size: " << maxBDSize << endl;
+            cout << "Min boundary size: " << minBDSize << endl;
         }
-        cout << "Max boundary size: " << maxBDSize << endl;
-        cout << "Min boundary size: " << minBDSize << endl;
     }
 }
 

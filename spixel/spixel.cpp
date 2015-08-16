@@ -55,7 +55,7 @@ void ProcessFiles(const string& paramFile, const string& dirName, const string& 
 
         if (params.stereo) {
             engine.ProcessImageStereo();
-            engine.PrintDebugInfoStereo();
+            if (params.debugOutput) engine.PrintDebugInfoStereo();
         } else {
             engine.ProcessImage();
         }
@@ -73,7 +73,7 @@ void ProcessFiles(const string& paramFile, const string& dirName, const string& 
             imwrite(outImageDisp, engine.GetDisparity());
         }
 
-        cout << "  no of superpixels: " << engine.GetNoOfSuperpixels() << endl;
+        cout << "No. of superpixels: " << engine.GetNoOfSuperpixels() << endl;
         nProcessed++;
     }
 
