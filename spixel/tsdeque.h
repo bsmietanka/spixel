@@ -99,7 +99,7 @@ public:
     void Release(const T& e) {
         std::unique_lock<std::mutex> lck(m);
 
-        LockMapType::iterator fiter = lockMap.find(e);
+        typename LockMapType::iterator fiter = lockMap.find(e);
         if (fiter != lockMap.end()) {
             for (const S& s : fiter->second)
                 locked.erase(s);
