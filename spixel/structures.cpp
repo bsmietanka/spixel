@@ -1,6 +1,5 @@
 #include "stdafx.h"
 #include "structures.h"
-#include "functions.h"
 
 // Pixel defininions
 ///////////////////////////
@@ -135,34 +134,10 @@ void SuperpixelStereo::UpdateDispSum(const cv::Mat1d& depthImg, double inlierThr
     }
 }
 
-//void SuperpixelStereo::UpdateInlierSums(const cv::Mat1d& depthImg, const cv::Mat1b& inliers)
-//{
-//    sumIRow = sumICol = 0;
-//    sumIRow2 = sumICol2 = 0;
-//    sumIRowCol = 0;
-//    sumIRowD = sumIColD = 0.0;
-//    sumID = 0.0;
-//    nI = 0;
-//    for (Pixel* p : pixels) {
-//        p->AddToInlierSums(depthImg, inliers,
-//            sumIRow, sumIRow2, sumICol, sumICol2, sumIRowCol, sumIRowD, sumIColD, sumID, nI);
-//    }
-//}
-
 void SuperpixelStereo::CalcPlaneLeastSquares(const cv::Mat1d& depthImg)
 {
     LeastSquaresPlane(sumIRow, sumIRow2, sumICol, sumICol2, sumIRowCol, sumIRowD, sumIColD, sumID, nI, plane);
 }
-/*
-void SuperpixelStereo::CalcPlaneLeastSquares(SuperpixelStereo* sq, const cv::Mat1d& depthImg)
-{
-    LeastSquaresPlane(sumIRow + sq->sumIRow, sumIRow2 + sq->sumIRow2, 
-        sumICol + sq->sumICol, sumICol2 + sq->sumICol2, sumIRowCol + sq->sumIRowCol, 
-        sumIRowD + sq->sumIRowD, sumIColD + sq->sumIColD, sumID + sq->sumID, 
-        nI + sq->nI, plane);
-    sq->plane = plane;
-}
-*/
 
 void SuperpixelStereo::GetRemovePixelDataStereo(const PixelData& pd, PixelChangeDataStereo& pcd) const 
 {
@@ -176,80 +151,6 @@ void SuperpixelStereo::GetAddPixelDataStereo(const PixelData& pd, PixelChangeDat
     qcd.newEDisp = sumDisp + pd.sumDispQ;
 }
 
-/*
-
-void SuperpixelStereo::GetAddPixelDataStereo(const PixelData& pd,
-const Matrix<Pixel>& pixelsImg,
-const cv::Mat1d& dispImg,
-const cv::Mat1b& inliers,
-Pixel* p, Pixel* q,
-PixelChangeDataStereo& qcd) const
-{
-GetAddPixelData(pd, qcd);
-
-SuperpixelStereo* sp = (SuperpixelStereo*)p->superPixel;
-SuperpixelStereo* sq = (SuperpixelStereo*)q->superPixel; // == this
-const Pixel* r;
-
-qcd.newEDisp = sumDisp + pd.sumDispQ;
-qcd.newBoundaryData = boundaryData;
-int sqBType = qcd.newBoundaryData[sp].type;
-
-if (sqBType == BTCo) {
-qcd.newBoundaryData[sp].coSum += p->CalcCoSmoothnessSum(inliers, sp->plane, sq->plane);
-} else if (sqBType == BTHi) {
-double sum = 0;
-int count = 0;
-
-if ((r = PixelAt(pixelsImg, p->row, p->col + 1)) != nullptr) {
-if (r->superPixel == sq) {
-r->CalcHiSmoothnessSum(BLeftFlag, inliers, sp->plane, sq->plane, sum, count);
-qcd.newBoundaryData[sq].hiSum += sum;
-qcd.newBoundaryData[sq].length += count;
-} else if (r->superPixel == sp) {
-r->CalcHiSmoothnessSum(BLeftFlag, inliers, sp->plane, sq->plane, sum, count);
-qcd.newBoundaryData[sq].hiSum -= sum;
-qcd.newBoundaryData[sq].length -= count;
-}
-}
-if ((r = PixelAt(pixelsImg, p->row, p->col - 1)) != nullptr) {
-if (r->superPixel == sq) {
-p->CalcHiSmoothnessSum(BLeftFlag, inliers, sp->plane, sq->plane, sum, count);
-qcd.newBoundaryData[sq].hiSum += sum;
-qcd.newBoundaryData[sq].length += count;
-} else if (r->superPixel == sp) {
-p->CalcHiSmoothnessSum(BLeftFlag, inliers, sp->plane, sq->plane, sum, count);
-qcd.newBoundaryData[sq].hiSum -= sum;
-qcd.newBoundaryData[sq].length -= count;
-}
-}
-if ((r = PixelAt(pixelsImg, p->row + 1, p->col)) != nullptr) {
-if (r->superPixel == sq) {
-r->CalcHiSmoothnessSum(BTopFlag, inliers, sp->plane, sq->plane, sum, count);
-qcd.newBoundaryData[sq].hiSum += sum;
-qcd.newBoundaryData[sq].length += count;
-} else if (r->superPixel == sp) {
-r->CalcHiSmoothnessSum(BTopFlag, inliers, sp->plane, sq->plane, sum, count);
-qcd.newBoundaryData[sq].hiSum -= sum;
-qcd.newBoundaryData[sq].length -= count;
-}
-}
-if ((r = PixelAt(pixelsImg, p->row - 1, p->col)) != nullptr) {
-if (r->superPixel == sq) {
-p->CalcHiSmoothnessSum(BTopFlag, inliers, sp->plane, sq->plane, sum, count);
-qcd.newBoundaryData[sq].hiSum += sum;
-qcd.newBoundaryData[sq].length += count;
-} else if (r->superPixel == sp) {
-p->CalcHiSmoothnessSum(BTopFlag, inliers, sp->plane, sq->plane, sum, count);
-qcd.newBoundaryData[sq].hiSum -= sum;
-qcd.newBoundaryData[sq].length -= count;
-}
-}
-}
-}
-
-
-*/
 double SuperpixelStereo::CalcDispEnergy(const cv::Mat1d& dispImg, double inlierThresh, double noDisp)
 {
     double sum = 0.0;
@@ -290,5 +191,36 @@ void SuperpixelStereo::CheckRegEnergy()
     if (fabs(eReg - CalcRegEnergy(sumRow, sumCol, sumRow2, sumCol2, size, numP)) > 0.01) {
         cout << "RE mismatch";
     }
+}
+
+// Functions
+///////////////////////////////////////////////////////////////////////////////
+
+void LeastSquaresPlane(double sumIRow, double sumIRow2, double sumICol, double sumICol2, double sumIRowCol, double sumIRowD, double sumIColD,
+    double sumID, double nI, Plane_d& plane)
+{
+    CV_Assert(sumIRow >= 0 && sumIRow2 >= 0 && sumICol >= 0 && sumICol2 >= 0 && sumIRowCol >= 0);
+
+    cv::Mat1d left = (cv::Mat1d(3, 3) << sumIRow2, sumIRowCol, sumIRow, sumIRowCol, sumICol2, sumICol, sumIRow, sumICol, nI);
+    cv::Mat1d right = (cv::Mat1d(3, 1) << sumIRowD, sumIColD, sumID);
+    cv::Mat1d result;
+
+    if (cv::solve(left, right, result, cv::DECOMP_CHOLESKY)) {
+        plane.x = result(0, 0);
+        plane.y = result(1, 0);
+        plane.z = result(2, 0);
+
+        //Plane_d dbgPlane;
+
+        //LeastSquaresPlaneDebug(sumIRow2, sumIRowCol, sumIRow, sumIRowD, sumIRowCol, sumICol2,
+        //    sumICol, sumIColD, sumIRow, sumICol, nI, sumID, dbgPlane);
+        //double d = norm(dbgPlane - plane);
+        //CV_Assert(d < 0.001);
+
+    } else {
+
+        // leave as it is... plane.x = plane.y = plane.z = 0.0;
+    }
+
 }
 

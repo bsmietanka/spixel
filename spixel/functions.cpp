@@ -548,34 +548,6 @@ void CalcBTEnergy(SuperpixelStereo* sp, SuperpixelStereo* sq, double occWeight, 
 }
 */
 
-void LeastSquaresPlane(double sumIRow, double sumIRow2, double sumICol, double sumICol2, double sumIRowCol, double sumIRowD, double sumIColD,
-    double sumID, double nI, Plane_d& plane)
-{
-    CV_Assert(sumIRow >= 0 && sumIRow2 >= 0 && sumICol >= 0 && sumICol2 >= 0 && sumIRowCol >= 0);
-
-    cv::Mat1d left = (cv::Mat1d(3, 3) << sumIRow2, sumIRowCol, sumIRow, sumIRowCol, sumICol2, sumICol, sumIRow, sumICol, nI);
-    cv::Mat1d right = (cv::Mat1d(3, 1) << sumIRowD, sumIColD, sumID);
-    cv::Mat1d result;
-
-    if (cv::solve(left, right, result, cv::DECOMP_CHOLESKY)) {
-        plane.x = result(0, 0);
-        plane.y = result(1, 0);
-        plane.z = result(2, 0);
-
-        //Plane_d dbgPlane;
-
-        //LeastSquaresPlaneDebug(sumIRow2, sumIRowCol, sumIRow, sumIRowD, sumIRowCol, sumICol2,
-        //    sumICol, sumIColD, sumIRow, sumICol, nI, sumID, dbgPlane);
-        //double d = norm(dbgPlane - plane);
-        //CV_Assert(d < 0.001);
-
-    } else {
-
-        // leave as it is... plane.x = plane.y = plane.z = 0.0;
-    }
-
-}
-
 //void LeastSquaresPlaneDebug(const double x1, const double y1, const double z1, const double d1,
 //    const double x2, const double y2, const double z2, const double d2,
 //    const double x3, const double y3, const double z3, const double d3,

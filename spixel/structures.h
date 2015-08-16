@@ -6,7 +6,6 @@
 #include <cstdint>
 #include <unordered_set>
 #include <unordered_map>
-#include "sallocator.h"
 
 using namespace std;
 
@@ -89,6 +88,10 @@ inline double SafeDiv(double a, double b, double aa)
 {
     return b == 0 ? a / b : aa;
 }
+
+void LeastSquaresPlane(double sumIRow, double sumIRow2, double sumICol, double sumICol2, double sumIRowCol, double sumIRowD, double sumIColD,
+    double sumID, double nI, Plane_d& plane);
+
 
 // Matrix -- very simple matrix
 /////////////////////////////////
