@@ -3,6 +3,7 @@
 #include "contrib/tinydir.h"
 #include <regex>
 #include <memory>
+#include <cstdarg>
 
 using namespace std;
 using namespace cv;
