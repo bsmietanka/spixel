@@ -87,7 +87,7 @@ void ProcessFiles(const string& paramFile, const string& dirName, const string& 
 
 
 
-int _tmain(int argc, char* argv[])
+int main(int argc, char* argv[])
 {
     // test();
     //_CrtSetBreakAlloc(298);
