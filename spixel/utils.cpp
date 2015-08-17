@@ -4,6 +4,7 @@
 #include <regex>
 #include <memory>
 #include <cstdarg>
+#include <direct.h>
 
 using namespace std;
 using namespace cv;
@@ -55,6 +56,17 @@ void EndDir(string& dirName)
 {
     if (!dirName.empty() && dirName.back() != '\\' && dirName.back() != '/')
         dirName += '/';
+}
+
+void MkDir(string& dirName)
+{
+    if (!dirName.empty()) {
+#ifdef WIN32
+        _mkdir(dirName.c_str());
+#else
+        mkdir(dirName, 0777);
+#endif
+    }
 }
 
 // From Jian's code

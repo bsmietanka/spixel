@@ -27,6 +27,10 @@ void ProcessFiles(const string& paramFile, const string& dirName, const string& 
     FindFiles(fileDir, pattern, files, false);
     EndDir(fileDir);
 
+    MkDir(fileDir + "/out");
+    MkDir(fileDir + "/seg");
+    if (params.stereo) MkDir(fileDir + "/disp");
+
     int nProcessed = 0;
     double totalTime = 0.0;
 
