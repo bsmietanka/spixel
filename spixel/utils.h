@@ -12,7 +12,7 @@ string ChangeExtension(const string& fileName, const string& newExt);
 
 // Append '/' to the end of dirName if not present and non-empty
 void EndDir(string& dirName);
-void MkDir(string& dirName);
+void MkDir(const string& dirName);
 
 string Format(const string& fs, ...);
 

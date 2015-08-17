@@ -58,7 +58,7 @@ void EndDir(string& dirName)
         dirName += '/';
 }
 
-void MkDir(string& dirName)
+void MkDir(const string& dirName)
 {
     if (!dirName.empty()) {
 #ifdef WIN32
