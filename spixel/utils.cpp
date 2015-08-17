@@ -1,6 +1,6 @@
 #include "stdafx.h"
 #include "utils.h"
-#include "tinydir.h"
+#include "contrib/tinydir.h"
 #include <regex>
 #include <memory>
 
