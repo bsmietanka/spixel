@@ -6,7 +6,7 @@
 #include <unordered_map>
 #include <fstream>   
 #include <thread>
-
+#include <stdexcept>
 
 // Constants
 ///////////////////////////////////////////////////////////////////////////////
@@ -1556,25 +1556,25 @@ void SPSegmentationEngine::DebugBoundary()
             SuperpixelStereo* sq = bdIter.first;
 
             auto nnbIter = newBoundaryData.find(pair<SuperpixelStereo*, SuperpixelStereo*>(sp, sq));
-            if (nnbIter == newBoundaryData.end()) throw exception("Can not find boundary");
+            if (nnbIter == newBoundaryData.end()) throw runtime_error("Can not find boundary");
             else { // nnbiter-> re-calculated // bInfo -> currently in 
                 if (nnbIter->second.type != bInfo.type) {
-                    throw exception("type mismatch");
+                    throw runtime_error("type mismatch");
                 }
                 if (bInfo.type == BTCo) {
                     if (nnbIter->second.coCount != bInfo.coCount) {
-                        throw exception("energy mismatch -- coCount");
+                        throw runtime_error("energy mismatch -- coCount");
                     }
                     if (fabs(nnbIter->second.coSum - bInfo.coSum) > 0.01) {
-                        throw exception("energy mismatch -- coSum");
+                        throw runtime_error("energy mismatch -- coSum");
                     }
                 }
                 if (bInfo.type == BTHi) {
                     if (fabs(nnbIter->second.hiSum - bInfo.hiSum) > 0.01) {
-                        throw exception("energy mismatch -- hiSum");
+                        throw runtime_error("energy mismatch -- hiSum");
                     }
                     if (nnbIter->second.hiCount != bInfo.hiCount) {
-                        throw exception("energy mismatch -- hiCount");
+                        throw runtime_error("energy mismatch -- hiCount");
                     }
                 }
             }
@@ -1589,7 +1589,7 @@ void SPSegmentationEngine::DebugDispSums()
         SuperpixelStereo* sps = (SuperpixelStereo*)sp;
         double disp = sps->CalcDispEnergy(depthImg, params.inlierThreshold, params.noDisp);
         if (fabs(sps->sumDisp - disp) > 0.01) {
-            throw exception("disp sum mismatch");
+            throw runtime_error("disp sum mismatch");
         }
     }
 }
