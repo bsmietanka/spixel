@@ -510,12 +510,27 @@ void AddToCoSmoothnessSum(SuperpixelStereo* sp, const Plane_d& planeq, double& e
     double ppx = sp->plane.x, ppy = sp->plane.y, ppz = sp->plane.z;
     double qpx = planeq.x, qpy = planeq.y, qpz = planeq.z;
 
-    eSmo = Sqr(ppz - qpz)*sp->size;
+    eSmo += Sqr(ppz - qpz)*sp->size;
     eSmo += 2 * (ppx - qpx)*(ppz - qpz)*sp->sumRow + Sqr(ppx - qpx) * sp->sumRow2;
     eSmo += 2 * (ppy - qpy)*(ppz - qpz)*sp->sumCol + Sqr(ppy - qpy) * sp->sumCol2;
     eSmo += 2 * (ppx - qpx)*(ppy - qpy)*sp->sumRowCol;
 }
 
+void CalcCoSmoothnessSum2Debug(SuperpixelStereo* sp, SuperpixelStereo* sq, double& eSmo, int& count)
+{
+    eSmo = 0;
+    count = 0;
+
+    if (sp->pixels.empty() && sq->pixels.empty())
+        return;
+
+    for (Pixel* p : sp->pixels) {
+        p->AddToCoSmoothnessSum(sp->plane, sq->plane, eSmo, count);
+    }
+    for (Pixel* q : sq->pixels) {
+        q->AddToCoSmoothnessSum(sp->plane, sq->plane, eSmo, count);
+    }
+}
 
 void CalcCoSmoothnessSum2(SuperpixelStereo* sp, SuperpixelStereo* sq, double& eSmo, int& count)
 {
@@ -526,6 +541,14 @@ void CalcCoSmoothnessSum2(SuperpixelStereo* sp, SuperpixelStereo* sq, double& eS
         AddToCoSmoothnessSum(sp, sq->plane, eSmo);
         AddToCoSmoothnessSum(sq, sp->plane, eSmo);
     }
+
+    /*
+    double eSmoDebug = 0;
+    int countDebug = 0;
+
+    CalcCoSmoothnessSum2Debug(sp, sq, eSmoDebug, countDebug);
+    assert(fabs(eSmo - eSmoDebug) < 0.01 && count == countDebug);
+    */
 }
 
 

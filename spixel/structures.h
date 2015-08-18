@@ -489,6 +489,19 @@ struct Pixel { // : public custom_alloc {
         } 
     }
 
+    void AddToCoSmoothnessSum(const Plane_d& planep, const Plane_d& planeq, double& sum, int& count) const
+    {
+        for (int i = ulr; i < (int)lrr; i++) {
+            for (int j = ulc; j < (int)lrc; j++) {
+                double pdp = DotProduct(planep, i, j, 1.0);
+                double qdp = DotProduct(planeq, i, j, 1.0);
+
+                sum += Sqr(pdp - qdp);
+                count++;
+            }
+        }
+    }
+
     void SubtractFromCoSmoothnessSum(const cv::Mat1d& depthImg, double inlierThresh, const Plane_d& planep, const Plane_d& planeq, double& sum, int& count) const
     {
         double sumAdd = 0.0;
