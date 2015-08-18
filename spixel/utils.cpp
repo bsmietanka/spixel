@@ -4,7 +4,9 @@
 #include <regex>
 #include <memory>
 #include <cstdarg>
+#ifdef WIN32
 #include <direct.h>
+#endif
 
 using namespace std;
 using namespace cv;
@@ -64,7 +66,7 @@ void MkDir(const string& dirName)
 #ifdef WIN32
         _mkdir(dirName.c_str());
 #else
-        mkdir(dirName, 0777);
+        mkdir(dirName.c_str(), 0777);
 #endif
     }
 }
