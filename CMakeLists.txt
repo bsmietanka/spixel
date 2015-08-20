@@ -11,6 +11,11 @@ IF(OPENMP_FOUND)
     SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
 ENDIF(OPENMP_FOUND)
 
+IF(CMAKE_COMPILER_IS_GNUCXX)
+   MESSAGE("CXX")
+   SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -O3") 
+ENDIF(CMAKE_COMPILER_IS_GNUCXX)
+
 SET(HEADER_FILES spixel/functions.h spixel/segengine.h spixel/stdafx.h spixel/structures.h spixel/targetver.h spixel/tsdeque.h spixel/utils.h)
 SET(SOURCE_FILES spixel/stdafx.cpp spixel/utils.cpp spixel/functions.cpp spixel/structures.cpp spixel/segengine.cpp spixel/spixel.cpp)
 
