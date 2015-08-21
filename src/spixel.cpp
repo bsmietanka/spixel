@@ -101,6 +101,8 @@ int main(int argc, char* argv[])
     } else if (argc == 5) {
         ProcessFiles(argv[1], argv[2], argv[3], argv[4]);
     } else {
+        cout << "Real-Time Coarse-to-fine Topologically Preserving Segmentation, CVPR 2015" << endl;
+        cout << "Built on: " << __DATE__ << " " << __TIME__ << endl;
         cout << "Usage: spixel config_file.yml file_dir file_pattern" << endl;
         cout << "   or: spixel config_file.yml file_dir file_pattern disparity_extension" << endl;
     }

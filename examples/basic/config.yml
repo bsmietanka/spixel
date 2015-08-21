@@ -1,0 +1,10 @@
+%YAML:1.0
+
+pixelSize: 8
+sPixelSize: 3
+
+# energy weights
+appWeight: 1.0
+regWeight: 1.0
+lenWeight: 1.0
+sizeWeight: 1.0

@@ -396,6 +396,8 @@ void SPSegmentationEngine::ProcessImage()
                 performanceInfo.levelIterations.back() = iters;
         }
         splitted = SplitPixels();
+        level--;
+
         t2.Stop();
         performanceInfo.levelTimes.push_back(t2.GetTimeInSec());
     } while (splitted && level >= params.minLevel);

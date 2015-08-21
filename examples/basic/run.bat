@@ -1,0 +1,1 @@
+spixel config.yml . *.png
