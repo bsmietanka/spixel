@@ -1,3 +1,14 @@
+===== DESCRIPTION =====
+
+This is an implementation of the algorithms in
+  
+    Real-Time Coarse-to-fine Topologically Preserving Segmentation
+	by Jian Yao, Marko Boben, Sanja Fidler, Raquel Urtasun
+	
+published in CVPR 2015.
+
+http://www.cv-foundation.org/openaccess/content_cvpr_2015/html/Yao_Real-Time_Coarse-to-Fine_Topologically_2015_CVPR_paper.html
+
 ===== LICENSE =====
 
 This software is copyright 2015 XXXX. It is released for personal or academic use only. Any commercial use is strictly prohibited except by explicit permission of the authors. For more information on commerical use, contact XXXX (XXX@YYYY). The authors of this software and corresponding paper assume no liability for its use and by using this software you agree to these terms.  
@@ -60,8 +71,3 @@ For an example see examples/stereo directory.
 Results appear in disp, seg, and out directories.
 
 Descriptions of possible parameters are found in the two yml files.
-
-
-
-
-Se
