@@ -57,7 +57,7 @@ struct SPSegmentationParameters {
     double hiPriorWeight = 5.0;     // \lambda_{hinge}
     double noDisp = 9.0;            // \lambda_{d}
     double inlierThreshold = 3.0;
-    int peblThreshold = 10;         // planeEstimationBundaryLengthThreshold 
+    int peblThreshold = 2;         // planeEstimationBundaryLengthThreshold 
     double updateThreshold = 0.01;
 
     int iterations = 1;
