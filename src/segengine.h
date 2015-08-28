@@ -3,6 +3,7 @@
 #include "stdafx.h"
 #include "structures.h"
 #include "tsdeque.h"
+#include <map>
 
 #define ADD_LEVEL_PARAM_DOUBLE(field, node, name) \
     updateDouble[name] = [](SPSegmentationParameters& params, double val) { params.field = val; };\
