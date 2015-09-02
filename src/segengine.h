@@ -44,8 +44,9 @@ void AddLevelParamFromNode(const FileNode& parentNode, const string& nodeName,
 
 
 struct SPSegmentationParameters {
-    int pixelSize = 16;      // Pixel (block) size -- initial size
-    int sPixelSize = 5;      // initial size of superpixels in Pixels (blocks)
+    //int pixelSize = 16;             // Pixel (block) size -- initial size
+    //int sPixelSize = 5;             // initial size of superpixels in Pixels (blocks)
+    int superpixelNum = 300;        // Number of superpixels (the actual number can be different)
     
     double appWeight = 1.0;
     double regWeight = 1.0;
@@ -63,8 +64,9 @@ struct SPSegmentationParameters {
 
     int iterations = 1;
     int maxUpdates = 400000;
+    int minPixelSize = 1;
+    int maxPixelSize = 16;
     int reSteps = 5;
-    int minLevel = 0;
 
     bool instantBoundary = false;   // Boundary re-estimation on each step of iteration
     bool stereo = false;
@@ -81,8 +83,9 @@ struct SPSegmentationParameters {
 
     void Read(const FileNode& node)
     {
-        UpdateFromNode(pixelSize, node["pixelSize"]);
-        UpdateFromNode(sPixelSize, node["sPixelSize"]);
+        //UpdateFromNode(pixelSize, node["pixelSize"]);
+        //UpdateFromNode(sPixelSize, node["sPixelSize"]);
+        UpdateFromNode(superpixelNum, node["superpixelNum"]);
         ADD_LEVEL_PARAM_DOUBLE(appWeight, node, "appWeight");
         ADD_LEVEL_PARAM_DOUBLE(regWeight, node, "regWeight");
         ADD_LEVEL_PARAM_DOUBLE(lenWeight, node, "lenWeight");
@@ -100,7 +103,8 @@ struct SPSegmentationParameters {
         ADD_LEVEL_PARAM_INT(reSteps, node, "reSteps");
         UpdateFromNode(inlierThreshold, node["inlierThreshold"]);
         UpdateFromNode(maxUpdates, node["maxUpdates"]);
-        UpdateFromNode(minLevel, node["minLevel"]);
+        UpdateFromNode(minPixelSize, node["minPixelSize"]);
+        UpdateFromNode(maxPixelSize, node["maxPixelSize"]);
         ADD_LEVEL_PARAM_INT(peblThreshold, node, "peblThreshold");
         UpdateFromNode(updateThreshold, node["updateThreshold"]);
         UpdateFromNode(debugOutput, node["debugOutput"]);
@@ -166,6 +170,7 @@ private:
         vector<int> levelIterations;
         double total = 0.0;
         vector<double> levelMaxEDelta;
+        vector<int> levelMaxPixelSize;
     };
 
     PerformanceInfo performanceInfo;
@@ -173,6 +178,7 @@ private:
     // Parameters
     SPSegmentationParameters params;
     double planeSmoothWeight = 1;   // Calculated from params in initialization
+    int initialMaxPixelSize;        // Calculated in initialization
 
     // Original image to process
     Mat origImg;
@@ -215,7 +221,7 @@ private:
     int IterateMoves(int level);
     void ReEstimatePlaneParameters();
     void EstimatePlaneParameters();
-    bool SplitPixels();
+    bool SplitPixels(int& newMaxPixelSize);
     void Reset();
     void UpdateBoundaryData();
     void UpdateBoundaryData2();

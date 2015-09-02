@@ -1,11 +1,8 @@
 %YAML:1.0
 
-# pixelSize is the initial size of block
-# sPixelSize is the initial size of superpixel (in blocks)
-# For example below, the initial size of superpixel is 21 x 21 pixels
+# Number of superpixels
 
-pixelSize: 7
-sPixelSize: 3
+superpixelNum: 1000
 
 # Stereo processing
 
@@ -24,4 +21,4 @@ priorWeight: 0.2
 occPriorWeight: 15
 hiPriorWeight: 0.7 
 reSteps: 4
-minLevel: 2
+minPixelSize: 3
