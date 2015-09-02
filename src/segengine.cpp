@@ -296,7 +296,7 @@ void SPSegmentationEngine::Initialize(Superpixel* spGenerator(int))
 {
     int imageSize = img.rows * img.cols;
     int gridSize = (int)sqrt((double)imageSize / params.superpixelNum);
-    int initDiv = iCeilDiv(gridSize, params.maxPixelSize);
+    int initDiv = max(2, iCeilDiv(gridSize, params.maxPixelSize));
     int maxPixelSize = iCeilDiv(gridSize, initDiv);
 
     initialMaxPixelSize = maxPixelSize;
