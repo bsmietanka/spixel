@@ -7,6 +7,7 @@
 #include <fstream>   
 #include <thread>
 #include <stdexcept>
+#include <cmath>
 
 // Constants
 ///////////////////////////////////////////////////////////////////////////////
@@ -274,40 +275,96 @@ SPSegmentationEngine::~SPSegmentationEngine()
     Reset();
 }
 
+// Works for x, y > 0
+inline int iCeilDiv(int x, int y)
+{
+    return (x + y - 1) / y;
+}
+
+void calcPixelSizes(int actualGridSize, int maxPixelSize,
+    int& actualMaxPixelSize, int& actualMinPixelSize, int& maxN, int& minN)
+{
+    int actualDiv = iCeilDiv(actualGridSize, maxPixelSize);
+
+    actualMaxPixelSize = iCeilDiv(actualGridSize, actualDiv);
+    actualMinPixelSize = actualGridSize / actualDiv;
+    maxN = actualGridSize % actualDiv;
+    minN = actualDiv - maxN;
+}
+
 void SPSegmentationEngine::Initialize(Superpixel* spGenerator(int))
 {
-    int pixelSize = params.pixelSize;
-    int imgPixelsRows = img.rows / pixelSize + (img.rows % pixelSize == 0 ? 0 : 1);
-    int imgPixelsCols = img.cols / pixelSize + (img.cols % pixelSize == 0 ? 0 : 1);
+    int imageSize = img.rows * img.cols;
+    int gridSize = (int)sqrt((double)imageSize / params.superpixelNum);
+    int initDiv = iCeilDiv(gridSize, params.maxPixelSize);
+    int maxPixelSize = iCeilDiv(gridSize, initDiv);
+
+    initialMaxPixelSize = maxPixelSize;
+
+    int imgSPixelsRows = iCeilDiv(img.rows, gridSize);
+    int imgSPixelsCols = iCeilDiv(img.cols, gridSize);
+
+    int imgPixelsRows = initDiv * (img.rows / gridSize) + iCeilDiv(img.rows % gridSize, maxPixelSize);
+    int imgPixelsCols = initDiv * (img.cols / gridSize) + iCeilDiv(img.cols % gridSize, maxPixelSize);
+
+    vector<int> rowDims(imgPixelsRows), colDims(imgPixelsCols);
+    vector<int> rowSDims(imgSPixelsRows, initDiv), colSDims(imgSPixelsCols, initDiv);
+    int maxPS, minPS, maxN, minN;
+    int ri = 0, ci = 0;
+
+    calcPixelSizes(gridSize, maxPixelSize, maxPS, minPS, maxN, minN);
+    while (ri < initDiv * (img.rows / gridSize)) {
+        for (int i = 0; i < maxN; i++) rowDims[ri++] = maxPS;
+        for (int i = 0; i < minN; i++) rowDims[ri++] = minPS;
+    }
+    while (ci < initDiv * (img.cols / gridSize)) {
+        for (int i = 0; i < maxN; i++) colDims[ci++] = maxPS;
+        for (int i = 0; i < minN; i++) colDims[ci++] = minPS;
+    }
+    if (img.rows % gridSize > 0) {
+        calcPixelSizes(img.rows % gridSize, maxPixelSize, maxPS, minPS, maxN, minN);
+        for (int i = 0; i < maxN; i++) rowDims[ri++] = maxPS;
+        for (int i = 0; i < minN; i++) rowDims[ri++] = minPS;
+        rowSDims.back() = maxN + minN;
+    }
+    if (img.cols % gridSize > 0) {
+        calcPixelSizes(img.cols % gridSize, maxPixelSize, maxPS, minPS, maxN, minN);
+        for (int i = 0; i < maxN; i++) colDims[ci++] = maxPS;
+        for (int i = 0; i < minN; i++) colDims[ci++] = minPS;
+        colSDims.back() = maxN + minN;
+    }
 
     // Initialize 'pixels', 'pixelsImg'
     pixelsImg = Matrix<Pixel>(imgPixelsRows, imgPixelsCols);
 
+    int i0, j0;
+
+    i0 = 0;
     for (int pi = 0; pi < imgPixelsRows; pi++) {
+        int i1 = i0 + rowDims[pi];
+        
+        j0 = 0;
         for (int pj = 0; pj < imgPixelsCols; pj++) {
-            int i0 = pi*pixelSize;
-            int j0 = pj*pixelSize;
-            int i1 = min(i0 + pixelSize, img.rows);
-            int j1 = min(j0 + pixelSize, img.cols);
+            int j1 = j0 + colDims[pj];
             pixelsImg(pi, pj).Initialize(pi, pj, i0, j0, i1, j1);
+            j0 = j1;
         }
+        i0 = i1;
     }
 
     // Create superpixels (from 'pixelsImg' matrix) and borders matrices
-    int sPixelSize = params.sPixelSize;
-    int imgSPixelsRows = imgPixelsRows / sPixelSize + (imgPixelsRows % sPixelSize == 0 ? 0 : 1);
-    int imgSPixelsCols = imgPixelsCols / sPixelSize + (imgPixelsCols % sPixelSize == 0 ? 0 : 1);
     PixelData pd;
     int superPixelIdCount = 0;
 
     superpixels.clear();
     superpixels.reserve(imgSPixelsCols*imgSPixelsRows);
+    i0 = 0;
     for (int pi = 0; pi < imgSPixelsRows; pi++) {
+        int i1 = i0 + rowSDims[pi];
+
+        j0 = 0;
         for (int pj = 0; pj < imgSPixelsCols; pj++) {
-            int i0 = pi*sPixelSize;
-            int j0 = pj*sPixelSize;
-            int i1 = min(i0 + sPixelSize, pixelsImg.rows);
-            int j1 = min(j0 + sPixelSize, pixelsImg.cols);
+            int j1 = j0 + colSDims[pj];
             Superpixel* sp = spGenerator(superPixelIdCount++); // Superpixel();
 
             // Update superpixels pointers in each pixel
@@ -334,7 +391,10 @@ void SPSegmentationEngine::Initialize(Superpixel* spGenerator(int))
             }
             sp->SetBorderLength(2 * spRSize + 2 * spCSize);
             superpixels.push_back(sp);
+
+            j0 = j1;
         }
+        i0 = i1;
     }
 
 }
@@ -384,23 +444,26 @@ void SPSegmentationEngine::ProcessImage()
 
     Timer t1;
     bool splitted;
-    int level = ceil(log2(params.pixelSize));
+    int maxPixelSize = initialMaxPixelSize;
+    int level = (int)ceil(log2(maxPixelSize));
 
     do {
         Timer t2;
 
+        performanceInfo.levelMaxPixelSize.push_back(maxPixelSize);
         performanceInfo.levelIterations.push_back(0);
         for (int iteration = 0; iteration < params.iterations; iteration++) {
             int iters = IterateMoves(level);
             if (iters > performanceInfo.levelIterations.back())
                 performanceInfo.levelIterations.back() = iters;
         }
-        splitted = SplitPixels();
+        if (maxPixelSize <= params.minPixelSize) splitted = false;
+        else splitted = SplitPixels(maxPixelSize);
         level--;
 
         t2.Stop();
         performanceInfo.levelTimes.push_back(t2.GetTimeInSec());
-    } while (splitted && level >= params.minLevel);
+    } while (splitted);
 
     t0.Stop();
     t1.Stop();
@@ -420,10 +483,13 @@ void SPSegmentationEngine::ProcessImageStereo()
 
     Timer t1;
     bool splitted;
-    int level = ceil(log2(params.pixelSize));
+    int maxPixelSize = initialMaxPixelSize;
+    int level = (int)ceil(log2(maxPixelSize));
 
     do {
         Timer t2;
+
+        performanceInfo.levelMaxPixelSize.push_back(maxPixelSize);
         performanceInfo.levelIterations.push_back(0);
         for (int iteration = 0; iteration < params.iterations; iteration++) {
             int iters = IterateMoves(level);
@@ -431,12 +497,14 @@ void SPSegmentationEngine::ProcessImageStereo()
                 performanceInfo.levelIterations.back() = iters;
             ReEstimatePlaneParameters();
         }
-        splitted = SplitPixels();
+        if (maxPixelSize <= params.minPixelSize) splitted = false;
+        else splitted = SplitPixels(maxPixelSize);
+
         level--;
 
         t2.Stop();
         performanceInfo.levelTimes.push_back(t2.GetTimeInSec());
-    } while (splitted && level >= params.minLevel);
+    } while (splitted);
 
     t0.Stop();
     t1.Stop();
@@ -741,7 +809,7 @@ void SPSegmentationEngine::UpdateBoundaryData2()
 }
 
 // Return true if pixels were actually split.
-bool SPSegmentationEngine::SplitPixels()
+bool SPSegmentationEngine::SplitPixels(int& newMaxPixelSize)
 {
     int imgPixelsRows = 0;
     int imgPixelsCols = 0;
@@ -818,6 +886,7 @@ bool SPSegmentationEngine::SplitPixels()
         }
         UpdatePPImage();
     }
+    newMaxPixelSize = iCeilDiv(maxPixelSize, 2);
     return true;
 }
 
@@ -1309,12 +1378,17 @@ void SPSegmentationEngine::PrintPerformanceInfo()
         for (double& t : performanceInfo.levelTimes)
             cout << t << ' ';
         cout << endl;
-        cout << "Max energy deltaa for each level: ";
+        cout << "Max energy delta for each level: ";
         for (double& t : performanceInfo.levelMaxEDelta)
             cout << t << ' ';
         cout << endl;
+        cout << "Iterations for each level: ";
         for (int& c : performanceInfo.levelIterations)
             cout << c << ' ';
+        cout << endl;
+        cout << "Max pixel sizes for each level: ";
+        for (int& ps : performanceInfo.levelMaxPixelSize)
+            cout << ps << ' ';
         cout << endl;
 
         int minBDSize = INT_MAX;

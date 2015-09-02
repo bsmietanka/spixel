@@ -1,11 +1,8 @@
 %YAML:1.0
 
-# pixelSize is the initial size of block
-# sPixelSize is the initial size of superpixel (in blocks)
-# For example below, the initial size of superpixel is 24 x 24 pixels
+# Number of superpixels
 
-pixelSize: 8
-sPixelSize: 3
+superpixelNum: 300
 
 # Energy weights for energy terms in Equation (1) from the paper
 # Set regWeight, lenWeight and sizeWeight to 0 for best results on
