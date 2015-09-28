@@ -46,6 +46,9 @@ struct BInfo {
     double coSum = 0.0;         // Smo value (sum) for coplanarity
     double hiSum = 0.0;         // Smo value (sum) for hinge
     int coCount = 0;
+    double sumRow = 0, sumCol = 0;  // Sums for plane estimation
+    double sumRow2 = 0, sumCol2 = 0;
+    double sumRowCol = 0;
 };
 
 // Functions
@@ -753,6 +756,13 @@ public:
 
 };
 
+inline void AddToDSums(double w, double sumRow, double sumCol, double sumRow2, double sumCol2,
+        double sumRowCol, double size, const Plane_d& plane, 
+        double& sumRowD, double& sumColD, double& sumD) {
+    sumRowD += w * (sumRow2 * plane.x + sumRowCol * plane.y + sumRow * plane.z);
+    sumColD += w * (sumRowCol * plane.x + sumCol2 * plane.y + sumCol * plane.z);
+    sumD += w * (sumRow * plane.x + sumCol * plane.y + size * plane.z);
+}
 
 class SuperpixelStereo : public Superpixel {
 public:
@@ -831,7 +841,7 @@ public:
     void CalcPlaneLeastSquares(const cv::Mat1d& depthImg);
     //void CalcPlaneLeastSquares(SuperpixelStereo* sq, const cv::Mat1d& depthImg);
 
-    template<class It, class Pr> void CalcPlaneLeastSquares(It from, It to, Pr pred, const cv::Mat1d& depthImg, double weightFactor)
+    template<class It, class Pr> void CalcPlaneLeastSquaresI(It from, It to, Pr pred, const cv::Mat1d& depthImg, double weightFactor)
     {
         double sumIRow = this->sumIRow;
         double sumICol = this->sumICol;
@@ -861,6 +871,110 @@ public:
         }
         LeastSquaresPlane(sumIRow, sumIRow2, sumICol, sumICol2, sumIRowCol, sumIRowD, sumIColD, sumID, nI, plane);
 
+    }
+
+    void CalcPlaneLeastSquaresI(const BorderDataMap& bdMap, const cv::Mat1d& depthImg, double weightFactor, int peblThreshold)
+    {
+        double sumIRow = this->sumIRow;
+        double sumICol = this->sumICol;
+        double sumIRow2 = this->sumIRow2;
+        double sumICol2 = this->sumICol2;
+        double sumIRowCol = this->sumIRowCol;
+        double sumIRowD = this->sumIRowD;
+        double sumIColD = this->sumIColD;
+        double sumID = this->sumID;
+        double nI = this->nI;
+
+        for (auto& bdIter : bdMap) {
+            if (bdIter.second.type == BTHi) {
+                //const BInfo& bi = bdIter.second;
+                //double w = weightFactor / bi.length;
+
+                //sumIRow += w * bi.sumRow;
+                //sumICol += w * bi.sumCol;
+                //sumIRow2 += w * bi.sumRow2;
+                //sumICol2 += w * bi.sumCol2;
+                //sumIRowCol += w * bi.sumRowCol;
+                //sumIRowD += w * bi.sumRowD;
+                //sumIColD += w * bi.sumColD;
+                //sumID += w * bi.sumD;
+                //nI += w * bi.length;
+            } else if (bdIter.second.type == BTCo && bdIter.second.length > peblThreshold) {
+                SuperpixelStereo* sq = bdIter.first;
+                double w = weightFactor / (size + sq->size);
+
+                sumIRow += w * sq->sumIRow;
+                sumICol += w * sq->sumICol;
+                sumIRow2 += w * sq->sumIRow2;
+                sumICol2 += w * sq->sumICol2;
+                sumIRowCol += w * sq->sumIRowCol;
+                sumIRowD += w * sq->sumIRowD;
+                sumIColD += w * sq->sumIColD;
+                sumID += w * sq->sumID;
+                nI += w * sq->nI;
+            }
+        }
+        LeastSquaresPlane(sumIRow, sumIRow2, sumICol, sumICol2, sumIRowCol, sumIRowD, sumIColD, sumID, nI, plane);
+
+    }
+
+    void CalcPlaneLeastSquares(const BorderDataMap& bdMap, const cv::Mat1d& depthImg, 
+        double weightFactorCo, double weightFactorHi, int peblThreshold)
+    {
+        double locSumRow = this->sumRow;
+        double locSumCol = this->sumCol;
+        double locSumRow2 = this->sumRow2;
+        double locSumCol2 = this->sumCol2;
+        double locSumRowCol = this->sumRowCol;
+        double locSumRowD = 0.0;
+        double locSumColD = 0.0;
+        double locSumD = 0.0;
+        double locN = this->size;
+
+        AddToDSums(1.0, plane, locSumRowD, locSumColD, locSumD);
+
+        for (auto& bdIter : bdMap) {
+            if (bdIter.second.type == BTHi) {
+                SuperpixelStereo* sq = bdIter.first;
+                const BInfo& bi = bdIter.second;
+                double w = weightFactorHi / bi.length;
+
+                locSumRow += w * bi.sumRow;
+                locSumCol += w * bi.sumCol;
+                locSumRow2 += w * bi.sumRow2;
+                locSumCol2 += w * bi.sumCol2;
+                locSumRowCol += w * bi.sumRowCol;
+                locN += w * bi.length;
+                ::AddToDSums(w, bi.sumRow, bi.sumCol, bi.sumRow2, bi.sumCol2, bi.sumRowCol, bi.length, sq->plane,
+                    locSumRowD, locSumColD, locSumD);
+            } else if (bdIter.second.type == BTCo && bdIter.second.length > peblThreshold) {
+                SuperpixelStereo* sq = bdIter.first;
+                double w = weightFactorCo / (size + sq->size);
+
+                locSumRow += w * sumRow;
+                locSumCol += w * sumCol;
+                locSumRow2 += w * sumRow2;
+                locSumCol2 += w * sumCol2;
+                locSumRowCol += w * sumRowCol;
+                locN += w * size;
+                AddToDSums(w, sq->plane, locSumRowD, locSumColD, locSumD);
+                locSumRow += w * sq->sumRow;
+                locSumCol += w * sq->sumCol;
+                locSumRow2 += w * sq->sumRow2;
+                locSumCol2 += w * sq->sumCol2;
+                locSumRowCol += w * sq->sumRowCol;
+                locN += w * sq->size;
+                sq->AddToDSums(w, sq->plane, locSumRowD, locSumColD, locSumD);
+            }
+        }
+        LeastSquaresPlane(locSumRow, locSumRow2, locSumCol, locSumCol2, locSumRowCol, locSumRowD, locSumColD, locSumD, locN, plane);
+
+    }
+
+    void AddToDSums(double w, const Plane_d& plane, double& sumRowD, double& sumColD, double& sumD) {
+        sumRowD += w * (sumRow2 * plane.x + sumRowCol * plane.y + sumRow * plane.z);
+        sumColD += w * (sumRowCol * plane.x + sumCol2 * plane.y + sumCol * plane.z);
+        sumD += w * (sumRow * plane.x + sumCol * plane.y + size * plane.z);
     }
 
     void ClearPixelSet() { pixels.clear(); }

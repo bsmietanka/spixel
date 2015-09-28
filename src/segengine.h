@@ -54,19 +54,21 @@ struct SPSegmentationParameters {
     double sizeWeight = 1.0;        
     double dispWeight = 2000.0;     // \lambda_{disp}
     double smoWeight = 0.2;         // \lambda_{smo}
+    double smoWeightCo = 0.1;
+    double smoWeightHi = 0.1;
     double priorWeight = 0.2;       // \lambda_{prior}
     double occPriorWeight = 15.0;   // \lambda_{occ}
     double hiPriorWeight = 5.0;     // \lambda_{hinge}
     double noDisp = 9.0;            // \lambda_{d}
     double inlierThreshold = 3.0;
-    int peblThreshold = 2;         // planeEstimationBundaryLengthThreshold 
+    int peblThreshold = 2;          // planeEstimationBundaryLengthThreshold 
     double updateThreshold = 0.01;
 
     int iterations = 1;
     int maxUpdates = 400000;
     int minPixelSize = 1;
     int maxPixelSize = 16;
-    int reSteps = 5;
+    int reSteps = 1;
 
     bool instantBoundary = false;   // Boundary re-estimation on each step of iteration
     bool stereo = false;
@@ -92,6 +94,8 @@ struct SPSegmentationParameters {
         ADD_LEVEL_PARAM_DOUBLE(sizeWeight, node, "sizeWeight");
         ADD_LEVEL_PARAM_DOUBLE(dispWeight, node, "dispWeight");
         ADD_LEVEL_PARAM_DOUBLE(smoWeight, node, "smoWeight");
+        ADD_LEVEL_PARAM_DOUBLE(smoWeightCo, node, "smoWeightCo");
+        ADD_LEVEL_PARAM_DOUBLE(smoWeightHi, node, "smoWeightHi");
         ADD_LEVEL_PARAM_DOUBLE(priorWeight, node, "priorWeight");
         ADD_LEVEL_PARAM_DOUBLE(occPriorWeight, node, "occPriorWeight");
         ADD_LEVEL_PARAM_DOUBLE(hiPriorWeight, node, "hiPriorWeight");
@@ -178,6 +182,8 @@ private:
     // Parameters
     SPSegmentationParameters params;
     double planeSmoothWeight = 1;   // Calculated from params in initialization
+    double planeSmoothWeightCo = 0.1;
+    double planeSmoothWeightHi = 0.1;
     int initialMaxPixelSize;        // Calculated in initialization
 
     // Original image to process
@@ -227,6 +233,7 @@ private:
     void UpdateBoundaryData2();
     void UpdatePlaneParameters();
     void UpdateStereoSums();
+    void UpdateHingeStereoSums();
     void UpdateDispSums();
 
     void DebugNeighborhoods();

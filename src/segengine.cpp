@@ -8,6 +8,18 @@
 #include <thread>
 #include <stdexcept>
 #include <cmath>
+#include <iomanip>
+
+#define PRINT_LEVEL_PARAM_DOUBLE(field) \
+    cout << "*" << #field << ": " << setprecision(4) << field << endl;
+
+#define PRINT_LEVEL_PARAM_INT(field) \
+    cout << "*" << #field << ": " << field << endl;
+
+#define PRINT_PARAM(field) \
+    cout << #field << ": " << field << endl;
+
+
 
 // Constants
 ///////////////////////////////////////////////////////////////////////////////
@@ -235,6 +247,33 @@ void SPSegmentationParameters::SetLevelParams(int level)
                 (level < pData.second.size()) ? pData.second[level] : pData.second.back());
         }
     }
+    if (debugOutput) {
+        cout << "--- Params for level " << level << " ----" << endl;
+        PRINT_LEVEL_PARAM_DOUBLE(appWeight);
+        PRINT_LEVEL_PARAM_DOUBLE(regWeight);
+        PRINT_LEVEL_PARAM_DOUBLE(lenWeight);
+        PRINT_LEVEL_PARAM_DOUBLE(sizeWeight);
+        PRINT_LEVEL_PARAM_DOUBLE(dispWeight);
+        PRINT_LEVEL_PARAM_DOUBLE(smoWeight);
+        PRINT_LEVEL_PARAM_DOUBLE(priorWeight);
+        PRINT_LEVEL_PARAM_DOUBLE(occPriorWeight);
+        PRINT_LEVEL_PARAM_DOUBLE(hiPriorWeight);
+        PRINT_LEVEL_PARAM_INT(reSteps);
+        PRINT_LEVEL_PARAM_INT(peblThreshold);
+        PRINT_PARAM(superpixelNum);
+        PRINT_PARAM(noDisp);
+        PRINT_PARAM(stereo);
+        PRINT_PARAM(inpaint);
+        PRINT_PARAM(instantBoundary);
+        PRINT_PARAM(iterations);
+        PRINT_PARAM(inlierThreshold);
+        PRINT_PARAM(maxUpdates);
+        PRINT_PARAM(minPixelSize);
+        PRINT_PARAM(maxPixelSize);
+        PRINT_PARAM(updateThreshold);
+        PRINT_PARAM(debugOutput);
+        cout << "---------------------------" << endl;
+    }
 }
 
 
@@ -408,6 +447,9 @@ void SPSegmentationEngine::InitializeStereo()
 
     double gridSize = sqrt((double)img.rows*img.cols / superpixels.size());
     planeSmoothWeight = params.smoWeight * gridSize * gridSize / params.dispWeight;
+    planeSmoothWeightCo = params.smoWeightCo * gridSize * gridSize;
+    planeSmoothWeightHi = params.smoWeightHi * gridSize * gridSize;
+    // PRINT_PARAM(planeSmoothWeight);
     //planeSmoothWeight = 0.4 * gridSize * gridSize;
 }
 
@@ -514,6 +556,7 @@ void SPSegmentationEngine::ProcessImageStereo()
 
 void SPSegmentationEngine::ReEstimatePlaneParameters()
 {
+    UpdateBoundaryData2();
     for (int s = 0; s < params.reSteps; s++) {
         UpdatePlaneParameters();
         UpdateBoundaryData2();
@@ -523,7 +566,8 @@ void SPSegmentationEngine::ReEstimatePlaneParameters()
 
 void SPSegmentationEngine::UpdatePlaneParameters()
 {
-    UpdateStereoSums();
+    //UpdateStereoSums();
+    UpdateHingeStereoSums();
 
     //#pragma omp parallel for
     for (int i = 0; i < superpixels.size(); i++) {
@@ -540,12 +584,14 @@ void SPSegmentationEngine::UpdatePlaneParameters()
         //if (!updated) {
         //    sp->CalcPlaneLeastSquares(depthImg);
         //}
-        sp->CalcPlaneLeastSquares(sp->boundaryData.begin(), sp->boundaryData.end(), 
-            [this](BorderDataMap::const_iterator iter) { 
-                return iter->second.type == BTCo && iter->second.length > params.peblThreshold ? iter->first : nullptr; 
-            },
-            depthImg,
-            planeSmoothWeight);
+        //sp->CalcPlaneLeastSquares(sp->boundaryData.begin(), sp->boundaryData.end(), 
+        //    [this](BorderDataMap::const_iterator iter) { 
+        //        return iter->second.type == BTCo && iter->second.length > params.peblThreshold ? iter->first : nullptr; 
+        //    },
+        //    depthImg,
+        //    planeSmoothWeight);
+        sp->CalcPlaneLeastSquares(sp->boundaryData, depthImg, 
+            planeSmoothWeightCo, planeSmoothWeightHi, params.peblThreshold);
         //sp->CalcPlaneLeastSquares(sp->boundaryData.begin(), sp->boundaryData.end(),
         //    [](BorderDataMap::const_iterator iter) { return nullptr; },
         //    depthImg);
@@ -617,8 +663,8 @@ void SPSegmentationEngine::UpdateStereoSums()
                     sps->sumIRowD += i*disp; sps->sumIColD += j*disp;
                     sps->sumID += disp;
                     sps->nI++;
-                    CV_Assert(sps->sumIRow >= 0 && sps->sumIRow2 >= 0 && sps->sumICol >= 0 
-                        && sps->sumICol2 >= 0 && sps->sumIRowCol >= 0);
+                    //CV_Assert(sps->sumIRow >= 0 && sps->sumIRow2 >= 0 && sps->sumICol >= 0 
+                    //    && sps->sumICol2 >= 0 && sps->sumIRowCol >= 0);
 
                 }
             }
@@ -802,6 +848,83 @@ void SPSegmentationEngine::UpdateBoundaryData2()
             } else {
                 bInfo.type = BTLo;
                 bInfo.typePrior = params.occPriorWeight;
+            }
+        }
+    }
+
+}
+
+// Called in re-estimation between updates "Stereo Sums"
+// for hinge boundaries -- used in CalcPlaneLeastSquares
+// Not efficient, change!
+void SPSegmentationEngine::UpdateHingeStereoSums()
+{
+    for (Superpixel* sp : superpixels) {
+        SuperpixelStereo* sps = (SuperpixelStereo*)sp;
+
+        for (auto& biIter : sps->boundaryData) {
+            BInfo& bi = biIter.second;
+            
+            bi.sumRow = 0; bi.sumCol = 0;
+            bi.sumRow2 = 0; bi.sumCol2 = 0;
+            bi.sumRowCol = 0;
+        }
+    }
+    for (int i = 1; i < ppImg.rows; i++) {
+        for (int j = 1; j < ppImg.cols; j++) {
+            Pixel* p = ppImg(i, j);
+            SuperpixelStereo* sps = (SuperpixelStereo*)p->superPixel;
+            const double& disp = depthImg(i, j);
+            Pixel* p1;
+            SuperpixelStereo* sps1;
+
+            // Upper pixel
+            p1 = ppImg(i - 1, j);
+            sps1 = (SuperpixelStereo*)p1->superPixel;
+
+            if (sps != sps1) {
+                auto& biIter = sps->boundaryData.find(sps1);
+
+                CV_Assert(biIter != sps->boundaryData.end());
+
+                BInfo& bi = biIter->second;
+                bi.sumRow += i; bi.sumCol += j;
+                bi.sumRow2 += i*i; bi.sumCol2 += j*j;
+                bi.sumRowCol += i*j;
+
+                auto& biIter1 = sps1->boundaryData.find(sps);
+
+                CV_Assert(biIter1 != sps1->boundaryData.end());
+
+                BInfo& bi1 = biIter1->second;
+
+                bi1.sumRow = bi.sumRow; bi1.sumCol = bi.sumCol;
+                bi1.sumRow2 = bi.sumRow2; bi1.sumCol2 = bi.sumCol2;
+                bi1.sumRowCol = bi.sumRowCol;
+            }
+            // Left pixel
+            p1 = ppImg(i, j - 1);
+            sps1 = (SuperpixelStereo*)p1->superPixel;
+
+            if (sps != sps1) {
+                auto& biIter = sps->boundaryData.find(sps1);
+
+                CV_Assert(biIter != sps->boundaryData.end());
+
+                BInfo& bi = biIter->second;
+                bi.sumRow += i; bi.sumCol += j;
+                bi.sumRow2 += i*i; bi.sumCol2 += j*j;
+                bi.sumRowCol += i*j;
+
+                auto& biIter1 = sps1->boundaryData.find(sps);
+
+                CV_Assert(biIter1 != sps1->boundaryData.end());
+
+                BInfo& bi1 = biIter1->second;
+
+                bi1.sumRow = bi.sumRow; bi1.sumCol = bi.sumCol;
+                bi1.sumRow2 = bi.sumRow2; bi1.sumCol2 = bi.sumCol2;
+                bi1.sumRowCol = bi.sumRowCol;
             }
         }
     }
@@ -1113,7 +1236,6 @@ int SPSegmentationEngine::Iterate(Deque<Pixel*>& list, Matrix<bool>& inList)
 int SPSegmentationEngine::IterateMoves(int level)
 {
     params.SetLevelParams(level);
-    if (params.debugOutput) cout << "appWeight: " << params.appWeight << endl;
 
     Deque<Pixel*> list(pixelsImg.rows * pixelsImg.cols);
     Matrix<bool> inList(pixelsImg.rows, pixelsImg.cols);
