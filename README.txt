@@ -7,7 +7,7 @@ This is an implementation of the algorithms in
 	
 published in CVPR 2015.
 
-http://www.cv-foundation.org/openaccess/content_cvpr_2015/html/Yao_Real-Time_Coarse-to-Fine_Topologically_2015_CVPR_paper.html
+http://www.cs.toronto.edu/~urtasun/publications/yao_etal_cvpr15.pdf
 
 ===== LICENSE =====
 
