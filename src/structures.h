@@ -774,9 +774,6 @@ public:
     double sumID = 0.0;
     int nI = 0;
 
-    //double sumIRow = 0.0;
-
-
     unordered_set<Pixel*> pixels;
     BorderDataMap boundaryData;
     Plane_d plane;
@@ -921,17 +918,17 @@ public:
     void CalcPlaneLeastSquares(const BorderDataMap& bdMap, const cv::Mat1d& depthImg, 
         double weightFactorCo, double weightFactorHi, int peblThreshold)
     {
-        double locSumRow = this->sumRow;
-        double locSumCol = this->sumCol;
-        double locSumRow2 = this->sumRow2;
-        double locSumCol2 = this->sumCol2;
-        double locSumRowCol = this->sumRowCol;
-        double locSumRowD = 0.0;
-        double locSumColD = 0.0;
-        double locSumD = 0.0;
-        double locN = this->size;
+        double locSumRow = this->sumIRow;
+        double locSumCol = this->sumICol;
+        double locSumRow2 = this->sumIRow2;
+        double locSumCol2 = this->sumICol2;
+        double locSumRowCol = this->sumIRowCol;
+        double locSumRowD = this->sumIRowD;
+        double locSumColD = this->sumIColD;
+        double locSumD = this->sumID;
+        double locN = this->nI;
 
-        AddToDSums(1.0, plane, locSumRowD, locSumColD, locSumD);
+        // AddToDSums(1.0, plane, locSumRowD, locSumColD, locSumD);
 
         for (auto& bdIter : bdMap) {
             if (bdIter.second.type == BTHi) {

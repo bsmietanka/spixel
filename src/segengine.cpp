@@ -557,6 +557,7 @@ void SPSegmentationEngine::ProcessImageStereo()
 void SPSegmentationEngine::ReEstimatePlaneParameters()
 {
     UpdateBoundaryData2();
+    UpdateInlierSums();
     for (int s = 0; s < params.reSteps; s++) {
         UpdatePlaneParameters();
         UpdateBoundaryData2();
@@ -615,7 +616,7 @@ void SPSegmentationEngine::EstimatePlaneParameters()
     #pragma omp parallel for
     for (int i = 0; i < superpixels.size(); i++) {
         SuperpixelStereo* sp = (SuperpixelStereo*)superpixels[i];
-        //InitSuperpixelPlane(sp, depthImg);
+        InitSuperpixelPlane(sp, depthImg);
         InitSuperpixelPlane(sp, depthImgAdj);
     }
     t.Stop();
@@ -1530,8 +1531,7 @@ void SPSegmentationEngine::PrintPerformanceInfo()
     }
 }
 
-/*
-void SPSegmentationEngine::UpdateInliers()
+void SPSegmentationEngine::UpdateInlierSums()
 {
     for (Superpixel* sp : superpixels) {
         SuperpixelStereo* sps = (SuperpixelStereo*)sp;
@@ -1564,7 +1564,6 @@ void SPSegmentationEngine::UpdateInliers()
         }
     }
 }
-*/
 
 // Try to move Pixel p to Superpixel containing Pixel q with coordinates (qRow, qCol)
 // Note: pixel q is must be neighbor of p and p->superPixel != q->superPixel

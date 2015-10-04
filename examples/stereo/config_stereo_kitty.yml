@@ -17,11 +17,10 @@ lenWeight: 1000.0
 sizeWeight: 1000.0
 dispWeight: 3000.0
 smoWeightCo: 0.2
-smoWeightHi: 0.1
+smoWeightHi: 0.2
 priorWeight: 1
 occPriorWeight: 15
 hiPriorWeight: 2
 inlierThreshold: 3
-peblThreshold: 0
 updateThreshold: 0.01
 minPixelSize: 3

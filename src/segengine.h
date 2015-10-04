@@ -44,8 +44,6 @@ void AddLevelParamFromNode(const FileNode& parentNode, const string& nodeName,
 
 
 struct SPSegmentationParameters {
-    //int pixelSize = 16;             // Pixel (block) size -- initial size
-    //int sPixelSize = 5;             // initial size of superpixels in Pixels (blocks)
     int superpixelNum = 300;        // Number of superpixels (the actual number can be different)
     
     double appWeight = 1.0;
@@ -54,27 +52,28 @@ struct SPSegmentationParameters {
     double sizeWeight = 1.0;        
     double dispWeight = 2000.0;     // \lambda_{disp}
     double smoWeight = 0.2;         // \lambda_{smo}
-    double smoWeightCo = 0.1;
-    double smoWeightHi = 0.1;
+    double smoWeightCo = 0.2;       // \lambda_{smo}
+    double smoWeightHi = 0.2;       // \lambda_{smo}
     double priorWeight = 0.2;       // \lambda_{prior}
     double occPriorWeight = 15.0;   // \lambda_{occ}
     double hiPriorWeight = 5.0;     // \lambda_{hinge}
     double noDisp = 9.0;            // \lambda_{d}
     double inlierThreshold = 3.0;
-    int peblThreshold = 2;          // planeEstimationBundaryLengthThreshold 
+    int peblThreshold = 0;          // planeEstimationBundaryLengthThreshold 
     double updateThreshold = 0.01;
 
     int iterations = 1;
     int maxUpdates = 400000;
     int minPixelSize = 1;
     int maxPixelSize = 16;
-    int reSteps = 1;
+    int reSteps = 10;
 
     bool instantBoundary = false;   // Boundary re-estimation on each step of iteration
     bool stereo = false;
     bool inpaint = false;           // use opencv's inpaint method to fill gaps in
                                     // disparity image
     bool debugOutput = false;
+    int randomSeed = 0;
 
     vector<pair<string, vector<double>>> levelParamsDouble;
     vector<pair<string, vector<int>>> levelParamsInt;
@@ -85,8 +84,6 @@ struct SPSegmentationParameters {
 
     void Read(const FileNode& node)
     {
-        //UpdateFromNode(pixelSize, node["pixelSize"]);
-        //UpdateFromNode(sPixelSize, node["sPixelSize"]);
         UpdateFromNode(superpixelNum, node["superpixelNum"]);
         ADD_LEVEL_PARAM_DOUBLE(appWeight, node, "appWeight");
         ADD_LEVEL_PARAM_DOUBLE(regWeight, node, "regWeight");
@@ -112,6 +109,7 @@ struct SPSegmentationParameters {
         ADD_LEVEL_PARAM_INT(peblThreshold, node, "peblThreshold");
         UpdateFromNode(updateThreshold, node["updateThreshold"]);
         UpdateFromNode(debugOutput, node["debugOutput"]);
+        UpdateFromNode(randomSeed, node["randomSeed"]);
         SetLevelParams(0);
     }
 
@@ -231,6 +229,7 @@ private:
     void Reset();
     void UpdateBoundaryData();
     void UpdateBoundaryData2();
+    void UpdateInlierSums();
     void UpdatePlaneParameters();
     void UpdateStereoSums();
     void UpdateHingeStereoSums();

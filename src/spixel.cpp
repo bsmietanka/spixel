@@ -21,6 +21,11 @@ void ProcessFiles(const string& paramFile, const string& dirName, const string& 
         return;
     }
 
+    if (params.randomSeed > 0) {
+        srand(params.randomSeed);
+        cout << "Random seed is: " << params.randomSeed << endl;
+    }
+
     vector<string> files;
     string fileDir = dirName;
 
