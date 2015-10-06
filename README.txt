@@ -12,7 +12,8 @@ http://www.cs.toronto.edu/~urtasun/publications/yao_etal_cvpr15.pdf
 ===== LICENSE =====
 
 This software is copyright by Jian Yao, Marko Boben, Sanja Fidler and Raquel Urtasun. It is released for personal or academic use only. 
-Any commercial use is strictly prohibited except by explicit permission by the authors. For more information on commercial use, contact Raquel Urtasun (urtasun@cs.toronto.edu). The authors of this software and corresponding paper assume no liability for its use and by using this software you agree to these terms.  
+Any commercial use is strictly prohibited except by explicit permission by the authors. For more information on commercial use, contact 
+Raquel Urtasun (urtasun@cs.toronto.edu). The authors of this software and corresponding paper assume no liability for its use and by using this software you agree to these terms.  
 
 Any academic use of this software should cite the following work:
 
