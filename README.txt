@@ -11,15 +11,33 @@ http://www.cs.toronto.edu/~urtasun/publications/yao_etal_cvpr15.pdf
 
 ===== LICENSE =====
 
-This software is copyright 2015 XXXX. It is released for personal or academic use only. Any commercial use is strictly prohibited except by explicit permission of the authors. For more information on commerical use, contact XXXX (XXX@YYYY). The authors of this software and corresponding paper assume no liability for its use and by using this software you agree to these terms.  
+This software is copyright by Jian Yao, Marko Boben, Sanja Fidler and Raquel Urtasun. It is released for personal or academic use only. Any commercial use is strictly prohibited except by explicit permission by the authors. For more information on commercial use, contact Raquel Urtasun (urtasun@cs.toronto.edu). The authors of this software and corresponding paper assume no liability for its use and by using this software you agree to these terms.  
 
-Any academic use of this software should cite the following in published work:
+Any academic use of this software should cite the following work:
 
 @inproceedings{YaoCVPR15,
     title = {Real-Time Coarse-to-fine Topologically Preserving Segmentation},
     author = {Jian Yao and Marko Boben and Sanja Fidler and Raquel Urtasun},
     booktitle = {CVPR},
     year = {2015}
+}
+
+If you use SGM for stereo, please also cite:
+
+@inproceedings{HirschmullerCVPR05,
+    title = {Accurate and efficient stereo processing by semi-global matching and mutual information},
+    author = {H. Hirschmuller},
+    booktitle = {CVPR},
+    year = {2005}
+}
+
+and the following paper (the SGM part of our code adopts this implementation):
+
+@inproceedings{YamaguchiECCV04,
+    title = {Efficient Joint Segmentation, Occlusion Labeling, Stereo and Flow Estimation},
+    author = {K. Yamaguchi and D. McAllester and R. Urtasun},
+    booktitle = {ECCV},
+    year = {2014}
 }
 
 ===== DEPENDENCIES =====
@@ -71,3 +89,7 @@ For an example see examples/stereo directory.
 Results appear in disp, seg, and out directories.
 
 Descriptions of possible parameters are found in the two yml files.
+
+===== CONTACT =====
+
+If you have questions regarding the code, please contact marko.boben@fri.uni-lj.si.
