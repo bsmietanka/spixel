@@ -3,6 +3,7 @@ CMAKE_MINIMUM_REQUIRED(VERSION 2.6)
 
 FIND_PACKAGE(OpenCV REQUIRED)
 FIND_PACKAGE(OpenMP) 
+FIND_PACKAGE(PNG REQUIRED)
 
 IF(OPENMP_FOUND)
     MESSAGE("OpenMP Enabled")
@@ -18,7 +19,7 @@ ENDIF(CMAKE_COMPILER_IS_GNUCXX)
 SET(HEADER_FILES src/functions.h src/segengine.h src/stdafx.h src/structures.h src/targetver.h src/tsdeque.h src/utils.h)
 SET(SOURCE_FILES src/stdafx.cpp src/utils.cpp src/functions.cpp src/structures.cpp src/segengine.cpp src/spixel.cpp)
 
-INCLUDE_DIRECTORIES(${OpenCV_INCLUDE_DIRS})
+INCLUDE_DIRECTORIES(${OpenCV_INCLUDE_DIRS} ${PNG_INCLUDE_DIR})
 ADD_EXECUTABLE(spixel ${SOURCE_FILES} ${HEADER_FILES})
 TARGET_LINK_LIBRARIES(spixel ${OpenCV_LIBS})
 

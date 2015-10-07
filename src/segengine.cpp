@@ -1455,6 +1455,9 @@ void SPSegmentationEngine::PrintDebugInfo()
 
 void SPSegmentationEngine::PrintDebugInfoStereo()
 {
+    if (!params.debugOutput)
+        return;
+
     StatData stat;
 
     MeanAndVariance(superpixels.begin(), superpixels.end(),
@@ -1490,9 +1493,11 @@ int SPSegmentationEngine::GetNoOfSuperpixels() const
 
 void SPSegmentationEngine::PrintPerformanceInfo()
 {
-    if (!params.debugOutput) {
-        cout << "Total time: " << performanceInfo.total << " sec." << endl;
-    } else {
+    if (params.timingOutput && !params.debugOutput) {
+        cout << "Processing time: " << performanceInfo.total << " sec." << endl;
+    }
+    if (params.debugOutput) {
+        cout << "No. of superpixels: " << GetNoOfSuperpixels() << endl;
         cout << "Initialization time: " << performanceInfo.init << " sec." << endl;
         cout << "Ransac time: " << performanceInfo.ransac << " sec." << endl;
         cout << "Time of image processing: " << performanceInfo.imgproc << " sec." << endl;

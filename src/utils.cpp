@@ -18,31 +18,35 @@ using namespace cv;
 // Returns list of files (without dir name)
 void FindFiles(const string& dir, const string& pattern, vector<string>& files, bool fullPath)
 {
-    files.clear();
-    string regexPattern = "";
-    tinydir_dir dirInfo;
+    try {
+        files.clear();
+        string regexPattern = "";
+        tinydir_dir dirInfo;
 
-    for (auto ch : pattern) {
-        if (ch == '.') regexPattern += "\\.";
-        else if (ch == '*') regexPattern += ".*";
-        else if (ch == '?') regexPattern += ".";
-        else regexPattern += ch;
-    }
-    regex reg(regexPattern);
-
-    if (tinydir_open(&dirInfo, dir.c_str()) == -1) {
-        return;
-    }
-    while (dirInfo.has_next) {
-        tinydir_file fileInfo;
-
-        if (tinydir_readfile(&dirInfo, &fileInfo) == -1)
-            return;
-        if (!fileInfo.is_dir && regex_match(fileInfo.name, reg)) {
-            if (fullPath) files.push_back(fileInfo.path);
-            else files.push_back(fileInfo.name);
+        for (auto ch : pattern) {
+            if (ch == '.') regexPattern += "\\.";
+            else if (ch == '*') regexPattern += ".*";
+            else if (ch == '?') regexPattern += ".";
+            else regexPattern += ch;
         }
-        tinydir_next(&dirInfo);
+
+        regex reg(regexPattern);
+
+        if (tinydir_open(&dirInfo, dir.c_str()) == -1) {
+            return;
+        }
+        while (dirInfo.has_next) {
+            tinydir_file fileInfo;
+
+            if (tinydir_readfile(&dirInfo, &fileInfo) == -1)
+                return;
+            if (!fileInfo.is_dir && regex_match(fileInfo.name, reg)) {
+                if (fullPath) files.push_back(fileInfo.path);
+                else files.push_back(fileInfo.name);
+            }
+            tinydir_next(&dirInfo);
+        }
+    } catch (...) {
     }
 }
 
@@ -53,6 +57,21 @@ string ChangeExtension(const string& fileName, const string& newExt)
     if (dotPos == string::npos) return fileName + newExt;
     else return fileName.substr(0, dotPos) + newExt;
 }
+
+string FilePath(const string& fileName)
+{
+    size_t pos = fileName.find_last_of("/\\");
+    string path = pos == string::npos ? "" : fileName.substr(0, pos);
+    EndDir(path);
+    return path;
+}
+
+string FileName(const string& fileName)
+{
+    size_t pos = fileName.find_last_of("/\\");
+    return pos == string::npos ? fileName : fileName.substr(pos + 1);
+}
+
 
 void EndDir(string& dirName)
 {

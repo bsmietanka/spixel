@@ -70,9 +70,12 @@ struct SPSegmentationParameters {
 
     bool instantBoundary = false;   // Boundary re-estimation on each step of iteration
     bool stereo = false;
+    bool computeSGM = false;
+    bool batchProcessing = true;
     bool inpaint = false;           // use opencv's inpaint method to fill gaps in
                                     // disparity image
     bool debugOutput = false;
+    bool timingOutput = true;
     int randomSeed = 0;
 
     vector<pair<string, vector<double>>> levelParamsDouble;
@@ -98,6 +101,8 @@ struct SPSegmentationParameters {
         ADD_LEVEL_PARAM_DOUBLE(hiPriorWeight, node, "hiPriorWeight");
         UpdateFromNode(noDisp, node["noDisp"]);
         UpdateFromNode(stereo, node["stereo"]);
+        UpdateFromNode(computeSGM, node["computeSGM"]);
+        UpdateFromNode(batchProcessing, node["batchProcessing"]);
         UpdateFromNode(inpaint, node["inpaint"]);
         UpdateFromNode(instantBoundary, node["instantBoundary"]);
         UpdateFromNode(iterations, node["iterations"]);
@@ -109,6 +114,7 @@ struct SPSegmentationParameters {
         ADD_LEVEL_PARAM_INT(peblThreshold, node, "peblThreshold");
         UpdateFromNode(updateThreshold, node["updateThreshold"]);
         UpdateFromNode(debugOutput, node["debugOutput"]);
+        UpdateFromNode(timingOutput, node["timingOutput"]);
         UpdateFromNode(randomSeed, node["randomSeed"]);
         SetLevelParams(0);
     }

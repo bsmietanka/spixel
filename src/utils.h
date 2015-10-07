@@ -10,6 +10,11 @@ void FindFiles(const string& dir, const string& pattern, vector<string>& files, 
 // Returns fileName with extension replaced by newExt (extension is substring of fileName from (including) the last dot)
 string ChangeExtension(const string& fileName, const string& newExt);
 
+// Extracts path name from fileName (appended with '/' inf not empty)
+string FilePath(const string& fileName);
+
+string FileName(const string& fileName);
+
 // Append '/' to the end of dirName if not present and non-empty
 void EndDir(string& dirName);
 void MkDir(const string& dirName);
