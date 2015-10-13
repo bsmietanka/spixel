@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "structures.h"
+#include "functions.h"
 
 // Pixel defininions
 ///////////////////////////
@@ -196,31 +197,44 @@ void SuperpixelStereo::CheckRegEnergy()
 // Functions
 ///////////////////////////////////////////////////////////////////////////////
 
+//void LeastSquaresPlane(double sumIRow, double sumIRow2, double sumICol, double sumICol2, double sumIRowCol, double sumIRowD, double sumIColD,
+//    double sumID, double nI, Plane_d& plane)
+//{
+//    CV_Assert(sumIRow >= 0 && sumIRow2 >= 0 && sumICol >= 0 && sumICol2 >= 0 && sumIRowCol >= 0);
+//
+//    cv::Mat1d left = (cv::Mat1d(3, 3) << sumIRow2, sumIRowCol, sumIRow, sumIRowCol, sumICol2, sumICol, sumIRow, sumICol, nI);
+//    cv::Mat1d right = (cv::Mat1d(3, 1) << sumIRowD, sumIColD, sumID);
+//    cv::Mat1d result;
+//
+//    if (cv::solve(left, right, result, cv::DECOMP_CHOLESKY)) {
+//        plane.x = result(0, 0);
+//        plane.y = result(1, 0);
+//        plane.z = result(2, 0);
+//
+//        Plane_d dbgPlane;
+//
+//        //LeastSquaresPlaneDebug(sumIRow2, sumIRowCol, sumIRow, sumIRowD, sumIRowCol, sumICol2,
+//        //    sumICol, sumIColD, sumIRow, sumICol, nI, sumID, dbgPlane);
+//        //double d = norm(dbgPlane - plane);
+//        //if (d > 0.01) {
+//        //    cout << " plane diff: " << d << " ";
+//        //}
+//       // CV_Assert(d < 0.001);
+//
+//    } else {
+//
+//        // leave as it is... plane.x = plane.y = plane.z = 0.0;
+//    }
+//
+//}
+
 void LeastSquaresPlane(double sumIRow, double sumIRow2, double sumICol, double sumICol2, double sumIRowCol, double sumIRowD, double sumIColD,
     double sumID, double nI, Plane_d& plane)
 {
     CV_Assert(sumIRow >= 0 && sumIRow2 >= 0 && sumICol >= 0 && sumICol2 >= 0 && sumIRowCol >= 0);
 
-    cv::Mat1d left = (cv::Mat1d(3, 3) << sumIRow2, sumIRowCol, sumIRow, sumIRowCol, sumICol2, sumICol, sumIRow, sumICol, nI);
-    cv::Mat1d right = (cv::Mat1d(3, 1) << sumIRowD, sumIColD, sumID);
-    cv::Mat1d result;
-
-    if (cv::solve(left, right, result, cv::DECOMP_CHOLESKY)) {
-        plane.x = result(0, 0);
-        plane.y = result(1, 0);
-        plane.z = result(2, 0);
-
-        //Plane_d dbgPlane;
-
-        //LeastSquaresPlaneDebug(sumIRow2, sumIRowCol, sumIRow, sumIRowD, sumIRowCol, sumICol2,
-        //    sumICol, sumIColD, sumIRow, sumICol, nI, sumID, dbgPlane);
-        //double d = norm(dbgPlane - plane);
-        //CV_Assert(d < 0.001);
-
-    } else {
-
-        // leave as it is... plane.x = plane.y = plane.z = 0.0;
-    }
+    LeastSquaresPlaneDebug(sumIRow2, sumIRowCol, sumIRow, sumIRowD, sumIRowCol, sumICol2,
+        sumICol, sumIColD, sumIRow, sumICol, nI, sumID, plane);
 
 }
 

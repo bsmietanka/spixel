@@ -571,37 +571,37 @@ void CalcBTEnergy(SuperpixelStereo* sp, SuperpixelStereo* sq, double occWeight, 
 }
 */
 
-//void LeastSquaresPlaneDebug(const double x1, const double y1, const double z1, const double d1,
-//    const double x2, const double y2, const double z2, const double d2,
-//    const double x3, const double y3, const double z3, const double d3,
-//    Plane_d& plane)
-//{
-//    const double epsilonValue = 1e-10;
-//
-//    double denominatorA = (x1*z2 - x2*z1)*(y2*z3 - y3*z2) - (x2*z3 - x3*z2)*(y1*z2 - y2*z1);
-//    if (denominatorA < epsilonValue) {
-//        plane.x = 0.0;
-//        plane.y = 0.0;
-//        plane.z = -1.0;
-//        return;
-//    }
-//
-//    plane.x = ((z2*d1 - z1*d2)*(y2*z3 - y3*z2) - (z3*d2 - z2*d3)*(y1*z2 - y2*z1)) / denominatorA;
-//
-//    double denominatorB = y1*z2 - y2*z1;
-//    if (denominatorB > epsilonValue) {
-//        plane.y = (z2*d1 - z1*d2 - plane.x * (x1*z2 - x2*z1)) / denominatorB;
-//    } else {
-//        denominatorB = y2*z3 - y3*z2;
-//        plane.y = (z3*d2 - z2*d3 - plane.x * (x2*z3 - x3*z2)) / denominatorB;
-//    }
-//    if (z1 > epsilonValue) {
-//        plane.z = (d1 - plane.x * x1 - plane.y * y1) / z1;
-//    } else if (z2 > epsilonValue) {
-//        plane.z = (d2 - plane.x * x2 - plane.y * y2) / z2;
-//    } else {
-//        plane.z = (d3 - plane.x * x3 - plane.y * y3) / z3;
-//    }
-//}
+bool LeastSquaresPlaneDebug(const double x1, const double y1, const double z1, const double d1,
+    const double x2, const double y2, const double z2, const double d2,
+    const double x3, const double y3, const double z3, const double d3,
+    Plane_d& plane)
+{
+    const double epsilonValue = 1e-10;
+
+    double denominatorA = (x1*z2 - x2*z1)*(y2*z3 - y3*z2) - (x2*z3 - x3*z2)*(y1*z2 - y2*z1);
+    if (denominatorA < epsilonValue) {
+        //plane.x = 0.0;
+        //plane.y = 0.0;
+        //plane.z = -1.0;
+        return false;
+    }
+
+    plane.x = ((z2*d1 - z1*d2)*(y2*z3 - y3*z2) - (z3*d2 - z2*d3)*(y1*z2 - y2*z1)) / denominatorA;
+
+    double denominatorB = y1*z2 - y2*z1;
+    if (denominatorB > epsilonValue) {
+        plane.y = (z2*d1 - z1*d2 - plane.x * (x1*z2 - x2*z1)) / denominatorB;
+    } else {
+        denominatorB = y2*z3 - y3*z2;
+        plane.y = (z3*d2 - z2*d3 - plane.x * (x2*z3 - x3*z2)) / denominatorB;
+    }
+    if (z1 > epsilonValue) {
+        plane.z = (d1 - plane.x * x1 - plane.y * y1) / z1;
+    } else if (z2 > epsilonValue) {
+        plane.z = (d2 - plane.x * x2 - plane.y * y2) / z2;
+    } else {
+        plane.z = (d3 - plane.x * x3 - plane.y * y3) / z3;
+    }
+}
 
 

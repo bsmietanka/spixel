@@ -570,7 +570,6 @@ void SPSegmentationEngine::UpdatePlaneParameters()
     //UpdateStereoSums();
     UpdateHingeStereoSums();
 
-    //#pragma omp parallel for
     for (int i = 0; i < superpixels.size(); i++) {
         SuperpixelStereo* sp = (SuperpixelStereo*)superpixels[i];
         bool updated = false;
