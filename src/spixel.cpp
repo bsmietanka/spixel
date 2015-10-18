@@ -36,7 +36,7 @@ Mat ConvertFloatToOCV(int width, int height, const float* data)
     return result;
 }
 
-Mat SGMPreprocessing(Mat& leftImage, Mat& rightImage)
+double SGMPreprocessing(const Mat& leftImage, const Mat& rightImage, Mat& dispImage)
 {
     png::image<png::rgb_pixel> leftImageSGM, rightImageSGM;
 
@@ -47,19 +47,22 @@ Mat SGMPreprocessing(Mat& leftImage, Mat& rightImage)
     size_t height = leftImageSGM.get_height();
 
     if (width != rightImageSGM.get_width() || height != rightImageSGM.get_height()) {
-        return Mat1w();
+        dispImage = Mat1w();
+        return 0.0;
     }
 
     float* dispImageFloat = (float*)malloc(width*height*sizeof(float));
 
     SGMStereo sgm;
+    Timer t;
 
     sgm.compute(leftImageSGM, rightImageSGM, dispImageFloat);
-    Mat dispImage = ConvertFloatToOCV(width, height, dispImageFloat);
+    t.Stop();
+    dispImage = ConvertFloatToOCV(width, height, dispImageFloat);
 
     free(dispImageFloat);
     
-    return dispImage;
+    return t.GetTimeInSec();
 }
 
 void ProcessFilesBatch(SPSegmentationParameters& params, const vector<string>& files, const string& fileDir)
@@ -181,11 +184,19 @@ void ProcessFilesStereoBatchSGM(SPSegmentationParameters& params, const vector<s
         }
         cout << "Processing: " << leftFileName << "/" << rightFileName << endl;
 
-        Mat dispImage = SGMPreprocessing(leftImage, rightImage);
+        Mat dispImage;
+        double sgmTime;
+        
+        sgmTime = SGMPreprocessing(leftImage, rightImage, dispImage);
+        totalTime += sgmTime;
 
-        if (rightImage.empty()) {
+        if (dispImage.empty()) {
             cout << "Failed creating SGM image for '" << leftImage << "'/'" << rightImage << "' pair" << endl;
             continue;
+        }
+
+        if (params.timingOutput) {
+            cout << "SGM processing time: " << sgmTime << " sec." << endl;
         }
 
         SPSegmentationEngine engine(params, leftImage, dispImage);
