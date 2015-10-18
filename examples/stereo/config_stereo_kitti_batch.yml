@@ -7,7 +7,6 @@ superpixelNum: 1000
 # Stereo processing
 
 stereo: 1
-batchProcessing: 0
 
 # Weights for energy terms in Equations (1), (7), (9), (10) from the paper
 # Values below give best results on kitti database
