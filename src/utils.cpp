@@ -85,7 +85,7 @@ void MkDir(const string& dirName)
 #ifdef WIN32
         _mkdir(dirName.c_str());
 #else
-        mkdir(dirName.c_str(), 0666);
+        mkdir(dirName.c_str(), 0777);
 #endif
     }
 }
