@@ -97,3 +97,7 @@ void CalcCoSmoothnessSum(const cv::Mat1d& depthImg, double inlierThresh, Superpi
 
 void CalcCoSmoothnessSum2(SuperpixelStereo* sp, SuperpixelStereo* sq, double& eSmo, int& count);
 
+bool LeastSquaresPlaneDebug(const double x1, const double y1, const double z1, const double d1,
+    const double x2, const double y2, const double z2, const double d2,
+    const double x3, const double y3, const double z3, const double d3,
+    Plane_d& plane);
