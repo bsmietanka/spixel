@@ -883,7 +883,7 @@ void SPSegmentationEngine::UpdateHingeStereoSums()
             sps1 = (SuperpixelStereo*)p1->superPixel;
 
             if (sps != sps1) {
-                auto& biIter = sps->boundaryData.find(sps1);
+                const auto& biIter = sps->boundaryData.find(sps1);
 
                 CV_Assert(biIter != sps->boundaryData.end());
 
@@ -892,7 +892,7 @@ void SPSegmentationEngine::UpdateHingeStereoSums()
                 bi.sumRow2 += i*i; bi.sumCol2 += j*j;
                 bi.sumRowCol += i*j;
 
-                auto& biIter1 = sps1->boundaryData.find(sps);
+                const auto& biIter1 = sps1->boundaryData.find(sps);
 
                 CV_Assert(biIter1 != sps1->boundaryData.end());
 
@@ -907,7 +907,7 @@ void SPSegmentationEngine::UpdateHingeStereoSums()
             sps1 = (SuperpixelStereo*)p1->superPixel;
 
             if (sps != sps1) {
-                auto& biIter = sps->boundaryData.find(sps1);
+                const auto& biIter = sps->boundaryData.find(sps1);
 
                 CV_Assert(biIter != sps->boundaryData.end());
 
@@ -916,7 +916,7 @@ void SPSegmentationEngine::UpdateHingeStereoSums()
                 bi.sumRow2 += i*i; bi.sumCol2 += j*j;
                 bi.sumRowCol += i*j;
 
-                auto& biIter1 = sps1->boundaryData.find(sps);
+                const auto& biIter1 = sps1->boundaryData.find(sps);
 
                 CV_Assert(biIter1 != sps1->boundaryData.end());
 
