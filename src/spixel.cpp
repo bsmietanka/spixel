@@ -102,7 +102,7 @@ void ProcessFilesBatch(SPSegmentationParameters& params, const vector<string>& f
 
     if (nProcessed > 1 && params.timingOutput) {
         cout << "Processed " << nProcessed << " files in " << totalTime << " sec. ";
-        cout << "Average per image " << (totalTime / nProcessed) << " sec.";
+        cout << "Average per image " << (totalTime / nProcessed) << " sec." << endl;
     }
 }
 
@@ -154,7 +154,7 @@ void ProcessFilesStereoBatch(SPSegmentationParameters& params, const vector<stri
 
     if (nProcessed > 1 && params.timingOutput) {
         cout << "Processed " << nProcessed << " files in " << totalTime << " sec. ";
-        cout << "Average per image " << (totalTime / nProcessed) << " sec.";
+        cout << "Average per image " << (totalTime / nProcessed) << " sec." << endl;
     }
 }
 
@@ -219,7 +219,7 @@ void ProcessFilesStereoBatchSGM(SPSegmentationParameters& params, const vector<s
 
     if (nProcessed > 1 && params.timingOutput) {
         cout << "Processed " << nProcessed << " files in " << totalTime << " sec. ";
-        cout << "Average per image " << (totalTime / nProcessed) << " sec.";
+        cout << "Average per image " << (totalTime / nProcessed) << " sec." << endl;
     }
 }
 
