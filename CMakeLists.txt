@@ -16,7 +16,7 @@ IF(OPENMP_FOUND)
 ENDIF(OPENMP_FOUND)
 
 IF(CMAKE_COMPILER_IS_GNUCXX)
-   SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -O3") 
+   SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -O3 -msse4.2") 
 ENDIF(CMAKE_COMPILER_IS_GNUCXX)
 
 SET(HEADER_FILES src/functions.h src/segengine.h src/stdafx.h src/structures.h src/targetver.h src/tsdeque.h src/utils.h src/contrib/SGMStereo.h)

@@ -64,8 +64,8 @@ Mat SGMPreprocessing(Mat& leftImage, Mat& rightImage)
 
 void ProcessFilesBatch(SPSegmentationParameters& params, const vector<string>& files, const string& fileDir)
 {
-    MkDir(fileDir + "/out");
-    MkDir(fileDir + "/seg");
+    MkDir(fileDir + "out");
+    MkDir(fileDir + "seg");
 
     int nProcessed = 0;
     double totalTime = 0.0;
@@ -108,9 +108,9 @@ void ProcessFilesBatch(SPSegmentationParameters& params, const vector<string>& f
 void ProcessFilesStereoBatch(SPSegmentationParameters& params, const vector<string>& files, const string& fileDir,
     const string& dispDir, const string& dispPattern)
 {
-    MkDir(fileDir + "/out");
-    MkDir(fileDir + "/seg");
-    MkDir(fileDir + "/disp");
+    MkDir(fileDir + "out");
+    MkDir(fileDir + "seg");
+    MkDir(fileDir + "disp");
 
     int nProcessed = 0;
     double totalTime = 0.0;
@@ -158,9 +158,9 @@ void ProcessFilesStereoBatch(SPSegmentationParameters& params, const vector<stri
 void ProcessFilesStereoBatchSGM(SPSegmentationParameters& params, const vector<string>& files, const string& leftFileDir,
     const string& rightFileDir, bool rightIsName)
 {
-    MkDir(leftFileDir + "/out");
-    MkDir(leftFileDir + "/seg");
-    MkDir(leftFileDir + "/disp");
+    MkDir(leftFileDir + "out");
+    MkDir(leftFileDir + "seg");
+    MkDir(leftFileDir + "disp");
 
     int nProcessed = 0;
     double totalTime = 0.0;
@@ -307,6 +307,11 @@ int main(int argc, char* argv[])
     } else if (argc == 5) {
         ProcessFiles(argv[1], argv[2], argv[3], argv[4]);
     } else {
+		cout << argc << endl;
+		for (int i = 1; i < argc; i++) {
+			cout << argv[i] << "  ";
+		}
+		cout << endl;
         cout << "Real-Time Coarse-to-fine Topologically Preserving Segmentation, CVPR 2015" << endl;
         cout << "Built on: " << __DATE__ << " " << __TIME__ << endl;
         cout << "Usage (stereo = 0 & batchProcessing = 0): spixel config_file.yml file_name" << endl;
