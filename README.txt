@@ -44,10 +44,14 @@ and the following paper (the SGM part of our code adopts this implementation):
 
 ===== DEPENDENCIES =====
 
-The only dependecies are 
+The dependecies are 
  - OpenCV (http://opencv.org)
  - tinydir.h (https://github.com/cxong/tinydir) to provide platform independent listing
    of files in a directory and is included in src/contrib
+ - SGMStereo.cpp and SGMStereo.h from http://ttic.uchicago.edu/~dmcallester/SPS/index.html
+   included in src/contrib
+ - libpng (http://www.libpng.org/pub/png/libpng.html) and png++ (http://www.nongnu.org/pngpp/)
+   which are dependencies of SGMStereo.
 
 ===== BUILD INSTRUCTIONS =====
 
@@ -55,6 +59,11 @@ To build this you need:
  - cmake (http://www.cmake.org/download/)
  - A C++11 compatible C++ compiler (tested on GCC 4.8.2 and Visual Studio 2013)
  - OpenCV (tested on 2.4.10, http://opencv.org/downloads.html)
+ - libpng and png++
+ 
+OpenCV, libpng and png++ can be easily obtained using apt-get command on Ubuntu Linux.
+On Windows you can download them from the pages listed above.
+   
 
 Build Instructions:
  - Linux: run
@@ -69,28 +78,37 @@ Build Instructions:
     Press "Configure"
 	Select the compiler (e.g. Visual Studio 12 2013 Win64)
 	Press "Configure"
-	In OpenCV_DIR Specify where opencv is installed 
+	Specify where OpenCV, libpng and png++ are installed in
+	OpenCV_DIR, PNG_LIBRARY_DEBUG, PNG_LIBRARY_RELEASE, PNG_PNG_INCLUDE_DIR,
+	png++_INCLUDE_DIR
 	Press "Configure" and "Generate"
 	Use sln file to build the binary (spixel.exe)	
 	
 
 ===== USAGE =====
 
-spixel executable takes three or four parameters
+spixel executable takes two, three or four parameters. Run spixel for more info.
 For "monocular segmentation" run it as
 
-    spixel config.yml directory_with_images file_pattern
+    spixel config.yml file_name
+	
+or, alternatively, if you want to process multiple files, run it as
 
-where config.yml is a configuration file in yml format where parameters of the algorithm are specified. For an example see examples/basic directory and run run.sh or run.bat file. Results appear in seg and out directories.
+    spixel config_batch.yml directory_with_images file_pattern
+
+where config.yml is a configuration file in yml format where parameters of the algorithm are specified. For an example see examples/basic directory and run run.sh, run_batch.sh or run.bat, run_batch.bat files. Results appear in seg and out directories.
 
 For stereo segmentation run it as 
 
-    spixel config.yml directory_with_images file_pattern disparity_extension_pattern
+    spixel config_stereo_kitti.yml file_name left_disparity_file_name
 	
-For an example see examples/stereo directory.
-Results appear in disp, seg, and out directories.
+or, alternatively, if you want also to run SGM to obtain disparity, run it as
 
-Descriptions of possible parameters are found in the two yml files.
+    spixel config_stereo_kitti_sgm.yml left_file_name right_file_name
+	
+See examples/stereo directory for appropriate yml files. Configuration files in this directory contain parameters used to give reported performance on kitti database. Results appear in disp, seg, and out directories.
+
+Descriptions of possible parameters are found in yml files.
 
 ===== CONTACT =====
 

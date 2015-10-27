@@ -1,1 +1,1 @@
-spixel config_stereo_kitty.yml . 000002_10L.png _left_disparity.png
+spixel config_stereo_kitti.yml 000002_10L.png 000002_10L_left_disparity.png

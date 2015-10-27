@@ -2,8 +2,7 @@
 
 # Number of superpixels
 
-superpixelNum: 300
-batchProcessing: 0
+superpixelNum: 1000
 
 # Energy weights for energy terms in Equation (1) from the paper
 # Set regWeight, lenWeight and sizeWeight to 0 for best results on
