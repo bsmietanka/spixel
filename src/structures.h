@@ -30,7 +30,7 @@ using namespace std;
 /////////////
 
 typedef std::int16_t sint;
-typedef std::uint8_t byte;
+typedef std::uint8_t uint8;
 typedef cv::Point3d Plane_d;
 
 // Constants
@@ -46,10 +46,10 @@ const int BTLo = 3;
 const int BTRo = 4;
 
 // Border position flags
-const byte BLeftFlag = 1;
-const byte BRightFlag = 2;
-const byte BTopFlag = 4;
-const byte BBottomFlag = 8;
+const uint8 BLeftFlag = 1;
+const uint8 BRightFlag = 2;
+const uint8 BTopFlag = 4;
+const uint8 BBottomFlag = 8;
 
 
 // Simple structs and classes
@@ -234,7 +234,7 @@ struct Pixel { // : public custom_alloc {
     sint ulr, ulc, lrr, lrc;       // coordinates of upper left and lower right corners (in img dimensions) 
 
     // Border info (see flags B*Flag above)
-    byte border;
+    uint8 border;
 
     Pixel() { }
 
@@ -328,7 +328,7 @@ struct Pixel { // : public custom_alloc {
     }
 
     /*
-    void CalcHiSmoothnessSum(byte sideFlag, const cv::Mat1b& inliers, const Plane_d& planep, const Plane_d& planeq,
+    void CalcHiSmoothnessSum(uint8 sideFlag, const cv::Mat1b& inliers, const Plane_d& planep, const Plane_d& planeq,
         double& sum, int& count) const
     {
         sum = 0.0;
@@ -371,7 +371,7 @@ struct Pixel { // : public custom_alloc {
     */
 
     // Estimate inliers on-the-fly (use when re-estimate boundary data)
-    void CalcHiSmoothnessSumEI(byte sideFlag, 
+    void CalcHiSmoothnessSumEI(uint8 sideFlag, 
         const cv::Mat1d& depthImg, double inlierThresh, 
         const Plane_d& planep, const Plane_d& planeq,
         double& sum, int& count, int& length) const
@@ -443,7 +443,7 @@ struct Pixel { // : public custom_alloc {
         }
     }
 
-    void CalcHiSmoothnessSumEI2(byte sideFlag,
+    void CalcHiSmoothnessSumEI2(uint8 sideFlag,
         const Plane_d& planep, const Plane_d& planeq,
         double& sum, int& count, int& length) const
     {
@@ -600,7 +600,7 @@ struct Pixel { // : public custom_alloc {
     bool BBottom() const { return (border & BBottomFlag) != 0; }
     void SwapBBottom() { border ^= BBottomFlag; }
     void SetBBottom() { border |= BBottomFlag; }
-    void CopyBFlag(byte srcBorder, byte flag) { border = (border & (~flag)) | (srcBorder & flag); }
+    void CopyBFlag(uint8 srcBorder, uint8 flag) { border = (border & (~flag)) | (srcBorder & flag); }
 
     int GetSize() const { return (lrc - ulc)*(lrr - ulr); }
     int GetCSize() const { return lrc - ulc; }

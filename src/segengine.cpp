@@ -69,7 +69,7 @@ double TotalEnergyDelta(const SPSegmentationParameters& params, PixelMoveData* p
 }
 
 // On-the-fly re-estimation
-void UpdateHingeBoundaryData(const Pixel* r, byte sideFlag, const Pixel* sideP, SuperpixelStereo* sp, SuperpixelStereo* sq,
+void UpdateHingeBoundaryData(const Pixel* r, uint8 sideFlag, const Pixel* sideP, SuperpixelStereo* sp, SuperpixelStereo* sq,
     const cv::Mat1d& depthImg, double inlierThresh,
     BorderDataMap& bcdp, BorderDataMap& bcdq,
     unordered_set<SuperpixelStereo*>& nbsps)

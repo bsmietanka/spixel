@@ -17,7 +17,6 @@
 
 #include "stdafx.h"
 #include "utils.h"
-#include "contrib/tinydir.h"
 #include <regex>
 #include <memory>
 #include <cstdarg>
@@ -28,84 +27,6 @@
 using namespace std;
 using namespace cv;
 
-// Uses tinydir.h (https://github.com/cxong/tinydir) and C++11 regular expressions
-// to be platform independent and not using dependencies as boost...
-// Note that it only works for "normal" file names -- consisting of letters and digits 
-// (does not escape all regex special characters...)
-// Returns list of files (without dir name)
-void FindFiles(const string& dir, const string& pattern, vector<string>& files, bool fullPath)
-{
-    try {
-        files.clear();
-        string regexPattern = "";
-        tinydir_dir dirInfo;
-
-        for (auto ch : pattern) {
-            if (ch == '.') regexPattern += "\\.";
-            else if (ch == '*') regexPattern += ".*";
-            else if (ch == '?') regexPattern += ".";
-            else regexPattern += ch;
-        }
-
-        regex reg(regexPattern);
-
-        if (tinydir_open(&dirInfo, dir.c_str()) == -1) {
-            return;
-        }
-        while (dirInfo.has_next) {
-            tinydir_file fileInfo;
-
-            if (tinydir_readfile(&dirInfo, &fileInfo) == -1)
-                return;
-            if (!fileInfo.is_dir && regex_match(fileInfo.name, reg)) {
-                if (fullPath) files.push_back(fileInfo.path);
-                else files.push_back(fileInfo.name);
-            }
-            tinydir_next(&dirInfo);
-        }
-    } catch (...) {
-    }
-}
-
-string ChangeExtension(const string& fileName, const string& newExt)
-{
-    size_t dotPos = fileName.find_last_of('.');
-
-    if (dotPos == string::npos) return fileName + newExt;
-    else return fileName.substr(0, dotPos) + newExt;
-}
-
-string FilePath(const string& fileName)
-{
-    size_t pos = fileName.find_last_of("/\\");
-    string path = pos == string::npos ? "" : fileName.substr(0, pos);
-    EndDir(path);
-    return path;
-}
-
-string FileName(const string& fileName)
-{
-    size_t pos = fileName.find_last_of("/\\");
-    return pos == string::npos ? fileName : fileName.substr(pos + 1);
-}
-
-
-void EndDir(string& dirName)
-{
-    if (!dirName.empty() && dirName.back() != '\\' && dirName.back() != '/')
-        dirName += '/';
-}
-
-void MkDir(const string& dirName)
-{
-    if (!dirName.empty()) {
-#ifdef WIN32
-        _mkdir(dirName.c_str());
-#else
-        mkdir(dirName.c_str(), 0777);
-#endif
-    }
-}
 
 // From Jian's code
 Mat ConvertRGBToLab(const Mat& img)
@@ -268,23 +189,3 @@ cv::Mat AdjustDisparityImage(const cv::Mat& img)
     img.convertTo(imgConv, CV_64FC1, 1 / 256.);
     return imgConv;
 }
-
-string Format(const string& fs, ...)
-{
-    unique_ptr<char[]> result;
-    va_list ap;
-    int newn, n = 2 * fs.size();
-
-    va_start(ap, fs);
-    while (true) {
-        result.reset(new char[n]);
-        strcpy(result.get(), fs.c_str());
-        newn = vsnprintf(result.get(), n, fs.c_str(), ap);
-        if (newn > n) n = newn + 1;
-        else if (newn < 0) n *= 2;
-        else break;
-    }
-    va_end(ap);
-    return string(result.get());
-}
-
