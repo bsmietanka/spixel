@@ -1,9 +1,9 @@
 # Real-Time Coarse-to-fine Topologically Preserving Segmentation
 
-This is an implementation of the algorithms in
+This is an implementation of the algorithms in [this](http://www.cs.toronto.edu/~urtasun/publications/yao_etal_cvpr15.pdf) paper
 
     Real-Time Coarse-to-fine Topologically Preserving Segmentation
-    by Jian Yao, Marko Boben, Sanja Fidler, Raquel Urtasun [link](http://www.cs.toronto.edu/~urtasun/publications/yao_etal_cvpr15.pdf)
+    by Jian Yao, Marko Boben, Sanja Fidler, Raquel Urtasun
 
 This repository provides python bindings for the orginal code.
 
